@@ -3,16 +3,17 @@
   "type": "module",
   "version": "1.0.0",
   "private": true,
-  "packageManager": "pnpm@11.9.0",
+  "packageManager": "pnpm@11.28.6",
   "engines": {
     "node": "^22.23.4 || ^24.22.1 || ^26.12.1"
   },
   "scripts": {
     "dev": "astro dev",
     "check:node": "node scripts/check-node-version.mjs",
-    "test:node": "node --test scripts/check-node-version.test.mjs",
+    "test:node": "node --test scripts/check-node-version.test.mjs scripts/check-pnpm-version.test.mjs scripts/check-container-ci.test.mjs",
+    "check:pnpm": "node scripts/check-pnpm-version.mjs",
     "audit:deps": "pnpm audit --audit-level=low",
-    "build": "node scripts/check-node-version.mjs && pnpm audit:deps && astro build",
+    "build": "node scripts/check-node-version.mjs && node scripts/check-pnpm-version.mjs && pnpm audit:deps && astro build",
     "preview": "astro preview",
     "check": "astro check --minimumFailingSeverity hint",
     "test": "vitest run",

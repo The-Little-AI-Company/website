@@ -1,0 +1,40 @@
+{
+  "artifacts": [
+    {
+      "url": "https://nodejs.org/dist/v24.22.1/node-v24.22.1-linux-x64.tar.xz",
+      "sha256": "6c172a9ab6718f7b801fb5a7bd486af2ee5e32758086a04b84fcce2aa77095e6",
+      "destination": "/opt/node/bin/node",
+      "member": "node-v24.22.1-linux-x64/bin/node",
+      "maxBytes": 67108864
+    },
+    {
+      "url": "https://raw.githubusercontent.com/actions/upload-artifact/bbbca2ddaa5d8feaa63e36b76fdaad77386f024f/dist/upload/index.js",
+      "sha256": "65e6f8843b48fb8e868fd8e3de993afbc2099fcf8cdebcca6b0da8166c5f8ab6",
+      "destination": "/opt/actions/upload/index.js",
+      "maxBytes": 4449446
+    },
+    {
+      "url": "https://raw.githubusercontent.com/actions/upload-artifact/bbbca2ddaa5d8feaa63e36b76fdaad77386f024f/dist/upload/package.json",
+      "sha256": "3ca9d4afd21425087cf31893b8f9f63c81b0b8408db5e343ca76e5f8aa26ab9a",
+      "destination": "/opt/actions/upload/package.json",
+      "maxBytes": 23
+    },
+    {
+      "url": "https://raw.githubusercontent.com/actions/deploy-pages/368f82528645a54fb793d4d04e342629a3f51346/dist/index.js",
+      "sha256": "63fd34d89cd23d8848618a019f978f2225880a38afe2328e6e7d72f20fc44e89",
+      "destination": "/opt/actions/deploy/index.js",
+      "maxBytes": 5855429
+    },
+    {
+      "url": "https://raw.githubusercontent.com/actions/deploy-pages/368f82528645a54fb793d4d04e342629a3f51346/dist/sourcemap-register.js",
+      "sha256": "1e19cfe548608e6501c19941746f85eadf71a72c4a52a1426b770e30f4f9bdf3",
+      "destination": "/opt/actions/deploy/sourcemap-register.js",
+      "maxBytes": 41034
+    }
+  ],
+  "nodeAuthentication": {
+    "clearSignedManifestSha256": "458c81e98060760ddadc152cd6d2a06e1d5b8cc8018863758e9f64fe72abc809",
+    "releaseSignerFingerprint": "5BE8A3F6C8A5C01D106C0AD820B1A390B168D356",
+    "buildProvenanceVerified": false
+  }
+}

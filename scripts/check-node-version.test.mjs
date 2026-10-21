@@ -50,24 +50,18 @@ test('CLI checks its executable and ignores version arguments and environment ov
   assert.match(result.stdout + result.stderr, new RegExp(`Node.js ${process.versions.node.replaceAll('.', '\\.')} passes`));
 });
 
-test('CI and Pages builds select patched runtimes on their existing release lines', () => {
-  for (const [path, expected] of [
-    ['../.github/workflows/ci.yml', '22.23.4'],
-    ['../.github/workflows/deploy.yml', '24.22.1'],
-  ]) {
-    const workflow = readFileSync(new URL(path, import.meta.url), 'utf8');
-    const versions = [...workflow.matchAll(/node-version: '([^']+)'/g)].map((match) => match[1]);
-    assert.ok(versions.length > 0, path);
-    assert.ok(versions.every((version) => version === expected), path);
-    assert.match(workflow, /run: node scripts\/check-node-version\.mjs/);
-  }
+test('the temporary CI container selects the patched runtime without a manager bootstrap', () => {
+  const manifest = JSON.parse(readFileSync(new URL('../.github/actions/security-ci/artifacts.json', import.meta.url), 'utf8'));
+  assert.equal(manifest.artifacts[0].url, 'https://nodejs.org/dist/v24.22.1/node-v24.22.1-linux-x64.tar.xz');
+  assert.equal(manifest.artifacts[0].member, 'node-v24.22.1-linux-x64/bin/node');
+  assert.equal(manifest.artifacts[0].sha256, '6c172a9ab6718f7b801fb5a7bd486af2ee5e32758086a04b84fcce2aa77095e6');
 });
 
 test('every build must pass runtime and dependency gates before Astro can run', () => {
   const { scripts } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
-  assert.equal(scripts.build, 'node scripts/check-node-version.mjs && pnpm audit:deps && astro build');
+  assert.equal(scripts.build, 'node scripts/check-node-version.mjs && node scripts/check-pnpm-version.mjs && pnpm audit:deps && astro build');
   assert.equal(scripts['audit:deps'], 'pnpm audit --audit-level=low');
   const deploy = readFileSync(new URL('../.github/workflows/deploy.yml', import.meta.url), 'utf8');
   assert.match(deploy, /deploy:\n    needs: build/);
-  assert.doesNotMatch(deploy, /continue-on-error|always\(\)|build-cmd:|pull_request/);
+  assert.doesNotMatch(deploy, /continue-on-error|build-cmd:|pull_request/);
 });

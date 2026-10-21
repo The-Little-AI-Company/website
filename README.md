@@ -16,8 +16,7 @@ no JavaScript, no cookies, and no third-party requests.
 
 ## Work on it
 
-CI uses Node.js 22.23.4. The Pages build uses Node.js 24.22.1, preserving the
-Astro action's default major version.
+The temporary CI and Pages pipeline uses Node.js 24.22.1 inside one fixed-runtime container. The security policy also retains the 22.23.3 rejection and 22.23.4 acceptance fixtures.
 Run `pnpm check:node` to check your executable and `pnpm test:node` to test the
 version policy without installing dependencies.
 
@@ -27,65 +26,71 @@ and lines that reach their [scheduled end of life](https://github.com/nodejs/Rel
 The accepted floors are 22.23.4, 24.22.1, and 26.12.1. Update the policy and CI
 pins when a later advisory changes these floors.
 
-Every build also runs `pnpm audit --audit-level=low` against the lockfile's
-production and development dependencies. An advisory or registry error stops the
-build before Astro runs. This dependency check is separate from the Node check.
-Node runs at build time. GitHub Pages serves the static output.
+Use the reviewed pnpm 11.28.6 artifact. The direct pnpm advisories set an 11.11.0
+floor, but that version still bundles affected dependencies. The selected artifact
+updates those dependencies. The review on October 21, 2026 also covers the
+[published pnpm advisories](https://github.com/pnpm/pnpm/security/advisories),
+including [lockfile path traversal](https://github.com/pnpm/pnpm/security/advisories/GHSA-c59q-g84q-2gj5)
+and [proxy environment expansion](https://github.com/pnpm/pnpm/security/advisories/GHSA-vx52-2968-3vc6).
 
-```sh
-pnpm install
-pnpm dev
-```
+The company-only temporary pipeline uses native exact-commit checkout, then
+explicit Docker commands. The build container mounts only read-only source and
+a fresh private working directory. It runs as the checkout owner, drops all
+capabilities and uses a read-only root filesystem. It has no Docker socket or
+artifact/OIDC runtime credentials. The original checkout, credential directory
+and launcher remain outside its writable mounts.
 
-The dev server runs at `http://127.0.0.1:4399`.
+A tiny trusted Docker action captures GitHub's supported runtime values before
+project code runs. The action API automatically mounts the host Docker socket.
+Its immutable entrypoint is setpriv, which drops to UID1001:GID65534 with no
+supplementary groups or capabilities before bash -p reads any runtime values.
+The capture script requires zero capabilities, no-new-privileges and no socket
+write access. Loader overrides are explicitly empty. The short trusted root
+setpriv startup still requires focused review. The pipeline does not claim that
+the handoff action is socket-free, and activation remains held.
 
-| Command | What it does |
-| --- | --- |
-| `pnpm dev` | Runs the dev server at `http://127.0.0.1:4399`. |
-| `pnpm build` | Builds the static site into `dist/`. |
-| `pnpm preview` | Serves the built `dist/`. |
-| `pnpm check` | Runs `astro check`. Hints count as failures. |
-| `pnpm test` | Runs the unit tests. They read `dist/`, so run `pnpm build` first, and again after any change to `src/` or `public/`. A stale build stops the run and says so. |
-| `pnpm test:e2e` | Runs the Playwright checks (the `chromium` project) against `astro preview` on port `E2E_PORT` (default 4400). It needs a build too. |
-| `pnpm verify` | Runs `check`, `build`, `test` and `test:e2e`, in that order. |
-| `pnpm screenshots` | Runs the `screenshots` Playwright project, which writes full-page screenshots of every page, at 360 and 1280 pixels in both color schemes, to `test-results/screenshots/`. They are for review, not baselines. |
-| `pnpm images` | Writes the smaller WebP copies in `public/images/` that `srcset` serves to narrow screens. Run it after replacing a source image. |
-| `pnpm og` | Renders the social card, `public/og.png`. |
-| `pnpm icons` | Renders the app icons under `public/`. |
+The application image uses pinned Ubuntu and the incident-fixed CA package. It
+verifies the signed-release-bound Node archive digest before extracting only
+Node. It never extracts npm, Corepack or Yarn. Signed apt installs the exact
+Playwright1.56.1 Ubuntu24 Chromium library list. Browser download and tests run
+without root or package-install privileges.
 
-The end-to-end tests check every page at several widths from 320 to 1440 pixels,
-in both color schemes. The same checks run in GitHub Actions on every pull
-request (`.github/workflows/ci.yml`). When they fail there, the workflow keeps
-the Playwright report and the traces of the failed tests for a week, as the
-`playwright-results` artifact of the run.
+The trusted image build verifies the reviewed pnpm tarball digest and archive
+paths before extracting it without execution into the read-only image. Both
+version policies and the project-input check also live in that image. Every
+manager phase checks project inputs, the actual runtime and the fixed manager
+before invoking its absolute image path. Project tests cannot rewrite those
+policies or the manager used later. The full audit includes development dependencies.
 
-### Browsers
+The pnpm artifact still includes braces 3.0.3, which matches
+[GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm).
+Its [maintainer disputes the untrusted-glob premise](https://github.com/micromatch/braces/issues/70).
+This assessment covers the fixed CI commands and reviewed workspace configuration,
+which supplies no package glob patterns and uses pnpm's literal `.` default.
+It does not clear pnpm for arbitrary repositories or user-supplied glob patterns.
+Reassess this boundary when changing workspace patterns or package-manager commands.
 
-Locally, the Playwright tests do not download a browser. They use the Chromium
-that `PLAYWRIGHT_BROWSERS_PATH` points at. On a machine without one, run
-`pnpm exec playwright install chromium` once. CI installs its own.
+Artifact upload and Pages deployment use the official immutable GitHub programs
+on the image-owned guarded Node runtime. Separate nonroot containers receive
+only the required short-lived credentials. The uploader mounts only a prepared
+regular tar file read-only. The deploy client receives no project mount. Neither
+client receives the host Docker socket. No custom artifact protocol is implemented.
 
-Two dependencies are pinned to an exact version, each for a reason:
+Output packing happens before credentials are supplied and rejects symlinks,
+hardlinks, special files and paths outside the output tree. Pages retains its
+normal artifact.tar shape. Playwright results keep the same artifact name and
+seven-day retention, but the zip now contains artifact.tar with the report and
+test-result directories. Extract that tar to inspect the reports.
 
-- `@playwright/test` is `1.56.1`, the release that matches the Chromium build
-  pre-installed here. A Playwright release is tested against one Chromium build,
-  so bump the two together. CI installs the matching one with
-  `playwright install chromium`.
-- `sharp` is `0.34.5`, the version Astro already installs for its image service,
-  so pnpm keeps a single copy. `pnpm images` and `pnpm icons` write files that
-  are committed, and the PNG decoder in the tests is checked against sharp. A
-  different libvips can encode different bytes, so a bump changes those files
-  without anyone editing their source. Move it together with Astro, then run
-  `pnpm images` and `pnpm icons` and commit what changes.
+The Pages build uses only contents:read. Write and OIDC permissions remain in the
+deploy job, which still requires the successful build and github-pages environment.
+The private credentials and container data are removed after use, including failures.
 
-### The social card and the icons
-
-`public/og.png` is generated. To change it, edit the card in `scripts/og.mjs`
-(or the tokens or the mark it reads), then run `pnpm og`. The script renders the
-card in Chromium at 1200 by 630 pixels. Commit the PNG together with the script.
-
-The app icons, `apple-touch-icon.png`, `icon-192.png` and `icon-512.png`, are
-exports of the same mark. Run `pnpm icons` after changing the mark.
+This candidate requires an explicit decision on the Node build-provenance gap,
+review, exact-head CI and a new production decision before activation. Prior
+approval of another commit does not activate this pipeline. Provider job hooks
+remain outside a workflow step's control. Native checkout refuses configured
+hooks and an older incident CA package instead of bypassing those checks.
 
 ## Where things live
 

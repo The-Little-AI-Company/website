@@ -1,50 +1,216 @@
 name: Deploy to GitHub Pages
 
-# Builds the static Astro site and publishes it to GitHub Pages on every push to dev.
 on:
   push:
     branches: [dev]
   workflow_dispatch:
 
-# Permissions the deploy needs: read the repo, write Pages, mint the OIDC token.
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
-# One deployment at a time; cancel an in-progress run if a newer push lands.
+env:
+  LD_PRELOAD: ''
+  LD_LIBRARY_PATH: ''
+  LD_AUDIT: ''
+  GLIBC_TUNABLES: ''
+  BASH_ENV: ''
+  ENV: ''
+  SHELLOPTS: ''
+  NODE_OPTIONS: ''
+  NODE_PATH: ''
+
 concurrency:
   group: pages
   cancel-in-progress: true
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24.22.1'
-      - name: Check the Node runtime
-        run: node scripts/check-node-version.mjs
-      - name: Install, build, and upload the site
-        uses: withastro/action@v6
-        with:
-          node-version: '24.22.1'
-        # package manager (pnpm) is auto-detected from pnpm-lock.yaml
+      - name: Native checkout of the exact event commit
+        id: checkout
+        shell: bash --noprofile --norc -p -e -o pipefail {0}
         env:
-          # The build asks GitHub for Callout's latest release. A token keeps shared runners from being rate limited.
+          EXPECTED_SHA: ${{ github.sha }}
+          CI_CHECKOUT_TOKEN: ${{ github.token }}
+        run: |
+          #!/usr/bin/env bash
+          set -euo pipefail
+          set +x
+          test -z "${LD_PRELOAD:-}${LD_LIBRARY_PATH:-}${LD_AUDIT:-}${GLIBC_TUNABLES:-}${BASH_ENV:-}${ENV:-}${NODE_OPTIONS:-}${NODE_PATH:-}"
+          test "$(id -u)" = 1001
+          test "$(stat -c %u "${GITHUB_WORKSPACE:?}")" = 1001
+          
+          # This first native step must not invoke a JavaScript action or package manager.
+          test "${RUNNER_ENVIRONMENT:-}" = github-hosted
+          test "${RUNNER_OS:-}" = Linux
+          test "${RUNNER_ARCH:-}" = X64
+          test "${GITHUB_SERVER_URL:-}" = https://github.com
+          test "${GITHUB_REPOSITORY:-}" = The-Little-AI-Company/website
+          [[ "${EXPECTED_SHA:-}" =~ ^[a-f0-9]{40}$ ]]
+          test -z "${ACTIONS_RUNNER_HOOK_JOB_STARTED:-}${ACTIONS_RUNNER_HOOK_JOB_COMPLETED:-}"
+          grep --quiet --fixed-strings 'VERSION_ID="24.04"' /etc/os-release
+          ca_version=$(dpkg-query --show --showformat='${Version}' ca-certificates)
+          dpkg --compare-versions "$ca_version" ge 20260816ubuntu0.24.04.1
+          printf 'Native checkout CA package: %s\n' "$ca_version"
+          test -z "${GIT_SSL_NO_VERIFY:-}${GIT_SSL_CAINFO:-}${CURL_CA_BUNDLE:-}${SSL_CERT_FILE:-}${SSL_CERT_DIR:-}"
+          export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null
+          : "${GITHUB_WORKSPACE:?The hosted workspace is required.}"
+          : "${CI_CHECKOUT_TOKEN:?The scoped workflow token is required.}"
+          cd -- "$GITHUB_WORKSPACE"
+          test -z "$(find . -mindepth 1 -maxdepth 1 -print -quit)"
+          
+          # Never persist credentials in the remote URL, repository config or a helper.
+          auth=$(printf 'x-access-token:%s' "$CI_CHECKOUT_TOKEN" | base64 -w 0)
+          printf '::add-mask::%s\n' "$auth"
+          trap 'unset CI_CHECKOUT_TOKEN auth' EXIT
+          git -c init.templateDir= init --quiet .
+          git remote add origin https://github.com/The-Little-AI-Company/website.git
+          GIT_CONFIG_COUNT=1 \
+          GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
+          GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" \
+          git -c credential.helper= -c core.hooksPath=/dev/null -c protocol.file.allow=never \
+            fetch --quiet --no-tags --depth=1 --no-recurse-submodules origin "$EXPECTED_SHA"
+          unset CI_CHECKOUT_TOKEN auth
+          git -c core.hooksPath=/dev/null checkout --quiet --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          printf 'Checked out exact event commit %s without persistent credentials.\n' "$EXPECTED_SHA"
+      - name: Freeze the private helper image and container data
+        id: prepare
+        shell: bash --noprofile --norc -p -e -o pipefail {0}
+        run: bash -p scripts/run-security-container.sh prepare
+      - name: Capture only the required runtime credentials after privilege drop
+        id: runtime
+        uses: ./.github/actions/runtime-handoff
+        with:
+          directory: ${{ steps.prepare.outputs.credentials }}
+          scope: artifact
+        env:
+          LD_PRELOAD: ''
+          LD_LIBRARY_PATH: ''
+          LD_AUDIT: ''
+          GLIBC_TUNABLES: ''
+          BASH_ENV: ''
+          ENV: ''
+          SHELLOPTS: ''
+          NODE_OPTIONS: ''
+          NODE_PATH: ''
+      - name: Type check, build, audit and test without runtime credentials
+        id: verify
+        shell: bash --noprofile --norc -p -e -o pipefail {0}
+        env:
+          PRIVATE_DIRECTORY: ${{ steps.prepare.outputs.directory }}
           GITHUB_TOKEN: ${{ github.token }}
+        run: bash -p scripts/run-security-container.sh verify "$PRIVATE_DIRECTORY"
+      - name: Pack only regular static site files without runtime credentials
+        shell: bash --noprofile --norc -p -e -o pipefail {0}
+        env:
+          PRIVATE_DIRECTORY: ${{ steps.prepare.outputs.directory }}
+        run: bash -p scripts/run-security-container.sh pack-pages "$PRIVATE_DIRECTORY"
+      - name: Upload the prepared Pages artifact with the official client
+        shell: bash --noprofile --norc -p -e -o pipefail {0}
+        env:
+          PRIVATE_DIRECTORY: ${{ steps.prepare.outputs.directory }}
+        run: bash -p scripts/run-security-container.sh upload-pages "$PRIVATE_DIRECTORY"
+      - name: Remove the private runtime values and container data
+        if: ${{ always() && steps.prepare.outputs.directory != '' }}
+        shell: bash --noprofile --norc -p -e -o pipefail {0}
+        env:
+          PRIVATE_DIRECTORY: ${{ steps.prepare.outputs.directory }}
+        run: bash -p scripts/run-security-container.sh cleanup "$PRIVATE_DIRECTORY"
 
   deploy:
     needs: build
-    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Deploy to GitHub Pages
+      - name: Native checkout of the exact event commit
+        id: checkout
+        shell: bash --noprofile --norc -p -e -o pipefail {0}
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+          CI_CHECKOUT_TOKEN: ${{ github.token }}
+        run: |
+          #!/usr/bin/env bash
+          set -euo pipefail
+          set +x
+          test -z "${LD_PRELOAD:-}${LD_LIBRARY_PATH:-}${LD_AUDIT:-}${GLIBC_TUNABLES:-}${BASH_ENV:-}${ENV:-}${NODE_OPTIONS:-}${NODE_PATH:-}"
+          test "$(id -u)" = 1001
+          test "$(stat -c %u "${GITHUB_WORKSPACE:?}")" = 1001
+          
+          # This first native step must not invoke a JavaScript action or package manager.
+          test "${RUNNER_ENVIRONMENT:-}" = github-hosted
+          test "${RUNNER_OS:-}" = Linux
+          test "${RUNNER_ARCH:-}" = X64
+          test "${GITHUB_SERVER_URL:-}" = https://github.com
+          test "${GITHUB_REPOSITORY:-}" = The-Little-AI-Company/website
+          [[ "${EXPECTED_SHA:-}" =~ ^[a-f0-9]{40}$ ]]
+          test -z "${ACTIONS_RUNNER_HOOK_JOB_STARTED:-}${ACTIONS_RUNNER_HOOK_JOB_COMPLETED:-}"
+          grep --quiet --fixed-strings 'VERSION_ID="24.04"' /etc/os-release
+          ca_version=$(dpkg-query --show --showformat='${Version}' ca-certificates)
+          dpkg --compare-versions "$ca_version" ge 20260816ubuntu0.24.04.1
+          printf 'Native checkout CA package: %s\n' "$ca_version"
+          test -z "${GIT_SSL_NO_VERIFY:-}${GIT_SSL_CAINFO:-}${CURL_CA_BUNDLE:-}${SSL_CERT_FILE:-}${SSL_CERT_DIR:-}"
+          export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null
+          : "${GITHUB_WORKSPACE:?The hosted workspace is required.}"
+          : "${CI_CHECKOUT_TOKEN:?The scoped workflow token is required.}"
+          cd -- "$GITHUB_WORKSPACE"
+          test -z "$(find . -mindepth 1 -maxdepth 1 -print -quit)"
+          
+          # Never persist credentials in the remote URL, repository config or a helper.
+          auth=$(printf 'x-access-token:%s' "$CI_CHECKOUT_TOKEN" | base64 -w 0)
+          printf '::add-mask::%s\n' "$auth"
+          trap 'unset CI_CHECKOUT_TOKEN auth' EXIT
+          git -c init.templateDir= init --quiet .
+          git remote add origin https://github.com/The-Little-AI-Company/website.git
+          GIT_CONFIG_COUNT=1 \
+          GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
+          GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" \
+          git -c credential.helper= -c core.hooksPath=/dev/null -c protocol.file.allow=never \
+            fetch --quiet --no-tags --depth=1 --no-recurse-submodules origin "$EXPECTED_SHA"
+          unset CI_CHECKOUT_TOKEN auth
+          git -c core.hooksPath=/dev/null checkout --quiet --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          printf 'Checked out exact event commit %s without persistent credentials.\n' "$EXPECTED_SHA"
+      - name: Freeze the private helper image and container data
+        id: prepare
+        shell: bash --noprofile --norc -p -e -o pipefail {0}
+        run: bash -p scripts/run-security-container.sh prepare
+      - name: Capture only the required runtime credentials after privilege drop
+        id: runtime
+        uses: ./.github/actions/runtime-handoff
+        with:
+          directory: ${{ steps.prepare.outputs.credentials }}
+          scope: deploy
+        env:
+          LD_PRELOAD: ''
+          LD_LIBRARY_PATH: ''
+          LD_AUDIT: ''
+          GLIBC_TUNABLES: ''
+          BASH_ENV: ''
+          ENV: ''
+          SHELLOPTS: ''
+          NODE_OPTIONS: ''
+          NODE_PATH: ''
+      - name: Deploy the prepared artifact with the official Pages client
         id: deployment
-        uses: actions/deploy-pages@v5
+        shell: bash --noprofile --norc -p -e -o pipefail {0}
+        env:
+          PRIVATE_DIRECTORY: ${{ steps.prepare.outputs.directory }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash -p scripts/run-security-container.sh deploy "$PRIVATE_DIRECTORY"
+      - name: Remove the private runtime values and container data
+        if: ${{ always() && steps.prepare.outputs.directory != '' }}
+        shell: bash --noprofile --norc -p -e -o pipefail {0}
+        env:
+          PRIVATE_DIRECTORY: ${{ steps.prepare.outputs.directory }}
+        run: bash -p scripts/run-security-container.sh cleanup "$PRIVATE_DIRECTORY"
