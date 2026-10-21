@@ -14,7 +14,7 @@ test('accepts the security releases and later patches on supported lines', () =>
 });
 
 test('rejects vulnerable releases, including older minors with higher patch numbers', () => {
-  for (const version of ['22.23.3', '22.22.99', '24.22.0', '24.21.99', '26.12.0', '26.11.99']) {
+  for (const version of ['22.23.3', '22.22.99', '24.19.0', '24.21.0', '24.22.0', '24.21.99', '26.12.0', '26.11.99']) {
     assert.match(nodeVersionError(version, verifiedAt), /below the required/, version);
   }
 });

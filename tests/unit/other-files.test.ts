@@ -192,7 +192,7 @@ describe('project files', () => {
     const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf-8')) as { scripts: Record<string, string> };
     expect(pkg.scripts['test']).toBe('vitest run');
     expect(pkg.scripts['test:e2e']).toBe('playwright test --project=chromium');
-    expect(pkg.scripts['verify']).toBe('pnpm check && pnpm build && pnpm test && pnpm test:e2e');
+    expect(pkg.scripts['verify']).toBe('pnpm check:node && pnpm test:node && pnpm check && pnpm build && pnpm test && pnpm test:e2e');
     expect(pkg.scripts['check']).toBe('astro check --minimumFailingSeverity hint');
     expect(pkg.scripts['og']).toBe('node scripts/og.mjs');
     expect(pkg.scripts['icons']).toBe('node scripts/icons.mjs');
