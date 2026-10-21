@@ -16,6 +16,22 @@ no JavaScript, no cookies, and no third-party requests.
 
 ## Work on it
 
+CI uses Node.js 22.23.4. The Pages build uses Node.js 24.22.1, preserving the
+Astro action's default major version.
+Run `pnpm check:node` to check your executable and `pnpm test:node` to test the
+version policy without installing dependencies.
+
+The guard checks `process.versions.node`. It rejects unsupported release lines,
+prereleases, versions below the [October 21, 2026 security releases](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases),
+and lines that reach their [scheduled end of life](https://github.com/nodejs/Release/blob/main/schedule.json).
+The accepted floors are 22.23.4, 24.22.1, and 26.12.1. Update the policy and CI
+pins when a later advisory changes these floors.
+
+Every build also runs `pnpm audit --audit-level=low` against the lockfile's
+production and development dependencies. An advisory or registry error stops the
+build before Astro runs. This dependency check is separate from the Node check.
+Node runs at build time. GitHub Pages serves the static output.
+
 ```sh
 pnpm install
 pnpm dev

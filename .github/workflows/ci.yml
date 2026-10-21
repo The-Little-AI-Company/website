@@ -17,6 +17,38 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # These old/fixed versions are intentional guard fixtures, never site build runtimes.
+  node-policy-fixtures:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      matrix:
+        include:
+          - node: '22.23.3'
+            expected-exit: 1
+          - node: '22.23.4'
+            expected-exit: 0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Set up the fixture runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Check the executable despite a spoofed version
+        shell: bash
+        env:
+          NODE_VERSION: '22.23.4'
+        run: |
+          set +e
+          node scripts/check-node-version.mjs 22.23.4
+          actual=$?
+          set -e
+          if [ "$actual" -ne "${{ matrix.expected-exit }}" ]; then
+            echo "Node ${{ matrix.node }} returned $actual. Expected ${{ matrix.expected-exit }}."
+            exit 1
+          fi
+
   verify:
     runs-on: ubuntu-latest
     # A hung browser or install should not hold a runner for the six hour default.
@@ -30,8 +62,12 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: '22.23.4'
           cache: pnpm
+      - name: Check the Node runtime
+        run: node scripts/check-node-version.mjs
+      - name: Test the Node version policy
+        run: node --test scripts/check-node-version.test.mjs
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Type check, hints included

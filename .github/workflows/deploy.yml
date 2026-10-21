@@ -23,8 +23,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.22.1'
+      - name: Check the Node runtime
+        run: node scripts/check-node-version.mjs
       - name: Install, build, and upload the site
         uses: withastro/action@v6
+        with:
+          node-version: '24.22.1'
         # package manager (pnpm) is auto-detected from pnpm-lock.yaml
         env:
           # The build asks GitHub for Callout's latest release. A token keeps shared runners from being rate limited.

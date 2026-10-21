@@ -5,16 +5,19 @@
   "private": true,
   "packageManager": "pnpm@11.9.0",
   "engines": {
-    "node": ">=22.12.0"
+    "node": "^22.23.4 || ^24.22.1 || ^26.12.1"
   },
   "scripts": {
     "dev": "astro dev",
-    "build": "astro build",
+    "check:node": "node scripts/check-node-version.mjs",
+    "test:node": "node --test scripts/check-node-version.test.mjs",
+    "audit:deps": "pnpm audit --audit-level=low",
+    "build": "node scripts/check-node-version.mjs && pnpm audit:deps && astro build",
     "preview": "astro preview",
     "check": "astro check --minimumFailingSeverity hint",
     "test": "vitest run",
     "test:e2e": "playwright test --project=chromium",
-    "verify": "pnpm check && pnpm build && pnpm test && pnpm test:e2e",
+    "verify": "pnpm check:node && pnpm test:node && pnpm check && pnpm build && pnpm test && pnpm test:e2e",
     "images": "node scripts/images.mjs",
     "og": "node scripts/og.mjs",
     "icons": "node scripts/icons.mjs",
