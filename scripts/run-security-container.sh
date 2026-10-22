@@ -50,7 +50,8 @@ if test "$mode" = cleanup; then
 fi
 image=$(cat -- "$directory/image-id")
 [[ "$image" =~ ^sha256:[a-f0-9]{64}$ ]]
-common=(run --rm --user "$uid:$gid" --read-only --cap-drop=ALL
+# --init reaps orphans (timeout as PID 1 does not) and forwards signals to the entrypoint.
+common=(run --rm --init --user "$uid:$gid" --read-only --cap-drop=ALL
   --security-opt=no-new-privileges --pids-limit=512 --shm-size=1g
   --tmpfs "/tmp:rw,nosuid,nodev,size=2g,mode=1777"
   --env RUNNER_OS=Linux --env RUNNER_ARCH=X64 --env RUNNER_ENVIRONMENT=github-hosted
