@@ -112,7 +112,7 @@ test('scoped manager inputs, full audit and all site tests remain required', () 
   assert.equal(createHash('sha256').update(read('pnpm-workspace.yaml')).digest('hex'), '3e4be68bf3deb65e33f1276e75c2970f0301b39fb844db5c1a05b08037591384');
   assert.match(entry, /test ! -e \.npmrc/);
   assert.match(entry, /npm_config_ignore_pnpmfile=true/);
-  assert.ok(entry.indexOf('pnpm audit --audit-level=low') < entry.indexOf('pnpm install --frozen-lockfile'));
+  assert.ok(entry.indexOf('pnpm audit --json --audit-level=low') < entry.indexOf('pnpm install --frozen-lockfile'));
   for (const command of ['pnpm check', 'pnpm build', 'pnpm test\n', 'node /opt/company/check-browser-policy.mjs', 'pnpm test:e2e']) assert.ok(entry.includes(command), command);
   assert.doesNotMatch(entry, /playwright install/);
   assert.ok(entry.indexOf('node /opt/company/check-browser-policy.mjs') < entry.indexOf('pnpm test:e2e'));
@@ -125,7 +125,7 @@ test('the actual manager and both policies are image-owned before mutable projec
   const bootstrap = read('.github/actions/security-ci/bootstrap.sh');
   assert.match(bootstrap, /sha512sum --check --status/);
   assert.ok(bootstrap.indexOf('/opt/company/validate-pnpm-archive.py') < bootstrap.indexOf('--directory /opt/pnpm'));
-  assert.match(bootstrap, /ln -s \/opt\/pnpm\/package\/bin\/pnpm.mjs \/opt\/node\/bin\/pnpm/);
+  assert.match(bootstrap, /ln -s \/opt\/pnpm\/package\/bin\/pnpm.cjs \/opt\/node\/bin\/pnpm/);
   assert.doesNotMatch(bootstrap, /\/opt\/node\/bin\/pnpm --|pnpm install/);
   assert.equal(read('.github/actions/security-ci/check-pnpm-version.mjs'), read('scripts/check-pnpm-version.mjs'));
   assert.equal(read('.github/actions/security-ci/validate-pnpm-archive.py'), read('scripts/validate-pnpm-archive.py'));
@@ -134,6 +134,28 @@ test('the actual manager and both policies are image-owned before mutable projec
   const wrapper = entry.slice(entry.indexOf('trusted_pnpm()'), entry.indexOf('upload()'));
   assert.ok(wrapper.indexOf('assert-project-policy.mjs') < wrapper.indexOf('scripts/check-pnpm-version.mjs'));
   assert.match(wrapper, /\/opt\/node\/bin\/pnpm "\$@"/);
+});
+
+function checkVerifyTelemetryScope(source) {
+  const verify = source.split('  verify)\n')[1].split('    ;;')[0];
+  const otherModes = source.replace(verify, '');
+  const disabled = verify.indexOf('    export ASTRO_TELEMETRY_DISABLED=1\n');
+  assert.ok(disabled >= 0, 'Astro telemetry must be disabled in the isolated verify process');
+  assert.ok(disabled < verify.indexOf('    trusted_pnpm audit --json --audit-level=low'));
+  assert.match(verify, /private_home=\$\(mktemp -d \/tmp\/company-manager-home\.XXXXXXXX\)/);
+  assert.match(verify, /export HOME="\$private_home" XDG_CONFIG_HOME=\/opt\/company\/empty-config/);
+  assert.doesNotMatch(verify, /(?:export )?XDG_CONFIG_HOME=(?!\/opt\/company\/empty-config(?:\s|$))/m);
+  assert.doesNotMatch(otherModes, /ASTRO_TELEMETRY_DISABLED|company-manager-home/);
+}
+
+test('Astro telemetry is disabled before verification while manager config remains immutable', () => {
+  checkVerifyTelemetryScope(entry);
+});
+
+test('telemetry omission, late disabling and writable manager config fail the scoped runtime contract', () => {
+  assert.throws(() => checkVerifyTelemetryScope(entry.replace('    export ASTRO_TELEMETRY_DISABLED=1\n', '')));
+  assert.throws(() => checkVerifyTelemetryScope(entry.replace('    export ASTRO_TELEMETRY_DISABLED=1\n', '').replace('    trusted_pnpm check\n', '    trusted_pnpm check\n    export ASTRO_TELEMETRY_DISABLED=1\n')));
+  assert.throws(() => checkVerifyTelemetryScope(entry.replace('XDG_CONFIG_HOME=/opt/company/empty-config', 'XDG_CONFIG_HOME="$private_home/config"')));
 });
 
 test('no runtime credentials are available to packing and uploader inputs are fixed', () => {

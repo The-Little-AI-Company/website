@@ -50,13 +50,13 @@ PY
 # It is never executed during image preparation and remains on the read-only image.
 curl --fail --silent --show-error --proto '=https' --proto-redir '=https' \
   --connect-timeout 15 --max-time 90 --max-filesize 8388608 \
-  --output "$workdir/pnpm.tgz" https://registry.npmjs.org/pnpm/-/pnpm-11.28.6.tgz
-printf '%s  %s\n' '55d90390c3b39042f1505a2697789f0256c6d95bb28bdd7cb731af1887c9f2629ef581acb9f4e4ec772024c8203c2aed22a03299b97103fdcf32668e905d0024' "$workdir/pnpm.tgz" | sha512sum --check --status
+  --output "$workdir/pnpm.tgz" https://registry.npmjs.org/pnpm/-/pnpm-10.34.7.tgz
+printf '%s  %s\n' 'ba98abc585539933375b5971f4bc6d6c73a1b4b7edc4a879e7d102fe5423d1e02309d67c60a11f04955093a96e521ad9c3b138cdd654ca5be563f378b3ae48bd' "$workdir/pnpm.tgz" | sha512sum --check --status
 python3 -I -S -B /opt/company/validate-pnpm-archive.py "$workdir/pnpm.tgz"
 mkdir -- /opt/pnpm /opt/company/empty-config
 tar --extract --gzip --file "$workdir/pnpm.tgz" --directory /opt/pnpm \
   --no-same-owner --no-same-permissions --keep-old-files
-ln -s /opt/pnpm/package/bin/pnpm.mjs /opt/node/bin/pnpm
+ln -s /opt/pnpm/package/bin/pnpm.cjs /opt/node/bin/pnpm
 chmod 555 -- /opt/company/empty-config
 
 # This is the only Node binary in the image. npm, Corepack and Yarn are not extracted.

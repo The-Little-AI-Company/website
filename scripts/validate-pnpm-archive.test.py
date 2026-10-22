@@ -14,7 +14,7 @@ class ArchiveValidationTests(unittest.TestCase):
     def make_archive(self, extra=None):
         data = io.BytesIO()
         with tarfile.open(fileobj=data, mode='w:gz') as archive:
-            for name in ['package/package.json', 'package/bin/pnpm.mjs', 'package/dist/pnpm.mjs']:
+            for name in ['package/package.json', 'package/bin/pnpm.cjs', 'package/dist/pnpm.cjs']:
                 member = tarfile.TarInfo(name)
                 member.size = 2
                 archive.addfile(member, io.BytesIO(b'{}'))
@@ -32,6 +32,15 @@ class ArchiveValidationTests(unittest.TestCase):
 
     def test_accepts_regular_package_files_without_extraction(self):
         self.check(self.make_archive(), True)
+
+    def test_rejects_the_previous_esm_layout_without_required_cjs_entries(self):
+        data = io.BytesIO()
+        with tarfile.open(fileobj=data, mode='w:gz') as archive:
+            for name in ['package/package.json', 'package/bin/pnpm.mjs', 'package/dist/pnpm.mjs']:
+                member = tarfile.TarInfo(name)
+                member.size = 2
+                archive.addfile(member, io.BytesIO(b'{}'))
+        self.check(data.getvalue(), False)
 
     def test_rejects_paths_outside_the_package(self):
         for name in ['../outside', '/absolute', 'package/../outside', 'package/back\\slash', 'package/line\nbreak']:

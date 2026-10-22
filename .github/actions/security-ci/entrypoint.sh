@@ -27,9 +27,9 @@ printf '%s\n' 'END COMPANY INSTALLED OS PACKAGE INVENTORY'
 node /opt/company/check-node-version.mjs
 
 trusted_pnpm() {
-  /opt/node/bin/node /opt/company/check-node-version.mjs
-  /opt/node/bin/node /opt/company/assert-project-policy.mjs "$PWD"
-  /opt/node/bin/node /opt/company/scripts/check-pnpm-version.mjs
+  /opt/node/bin/node /opt/company/check-node-version.mjs >&2
+  /opt/node/bin/node /opt/company/assert-project-policy.mjs "$PWD" >&2
+  /opt/node/bin/node /opt/company/scripts/check-pnpm-version.mjs >&2
   /opt/node/bin/pnpm "$@"
 }
 
@@ -49,7 +49,7 @@ case "${INPUT_MODE:-}" in
     test -z "$(find /github/runner_temp/work -mindepth 1 -maxdepth 1 -print -quit)"
     cp -a -- /source/. /github/runner_temp/work/
     cd -- /github/runner_temp/work
-    node --test scripts/check-node-version.test.mjs scripts/check-pnpm-version.test.mjs scripts/check-container-ci.test.mjs scripts/check-os-image-policy.test.mjs scripts/check-browser-policy.test.mjs
+    node --test scripts/check-node-version.test.mjs scripts/check-pnpm-version.test.mjs scripts/check-container-ci.test.mjs scripts/check-os-image-policy.test.mjs scripts/check-browser-policy.test.mjs scripts/validate-native-audit.test.mjs
     python3 -I -B scripts/validate-pnpm-archive.test.py
     python3 -I -B scripts/pack-regular.test.py
     python3 -I -B scripts/check-ci-mount.test.py
@@ -63,9 +63,13 @@ case "${INPUT_MODE:-}" in
     done
     private_home=$(mktemp -d /tmp/company-manager-home.XXXXXXXX)
     export HOME="$private_home" XDG_CONFIG_HOME=/opt/company/empty-config
+    # Astro checks telemetry settings before its CI guard; keep global manager config read-only.
+    export ASTRO_TELEMETRY_DISABLED=1
     export NPM_CONFIG_USERCONFIG=/dev/null NPM_CONFIG_GLOBALCONFIG=/dev/null
     export npm_config_manage_package_manager_versions=false npm_config_ignore_pnpmfile=true
-    trusted_pnpm audit --audit-level=low
+    node /opt/company/validate-native-audit.mjs --input "$PWD"
+    trusted_pnpm audit --json --audit-level=low > "$private_home/native-audit.json"
+    node /opt/company/validate-native-audit.mjs "$private_home/native-audit.json"
     trusted_pnpm install --frozen-lockfile
     trusted_pnpm check
     trusted_pnpm build

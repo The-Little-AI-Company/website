@@ -26,7 +26,7 @@ def validate_members(archive):
         names.add(name)
         if member.isfile():
             files.add(name)
-    required = {'package/package.json', 'package/bin/pnpm.mjs', 'package/dist/pnpm.mjs'}
+    required = {'package/package.json', 'package/bin/pnpm.cjs', 'package/dist/pnpm.cjs'}
     if not required <= files:
         raise ValueError('Required pnpm files are absent.')
 

@@ -36,6 +36,7 @@ COPY pack-regular.py /opt/company/pack-regular.py
 COPY package.json /opt/company/package.json
 COPY check-pnpm-version.mjs /opt/company/scripts/check-pnpm-version.mjs
 COPY assert-project-policy.mjs /opt/company/assert-project-policy.mjs
+COPY validate-native-audit.mjs /opt/company/validate-native-audit.mjs
 ENV PATH=/opt/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
     NODE_USE_SYSTEM_CA=1 \
     npm_config_manage_package_manager_versions=false

@@ -2,15 +2,15 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
-// The exact 11.28.6 artifact and its identified bundle were reviewed on 2026-10-21.
+// The exact 10.34.7 artifact and its identified bundle are selected for source review on 2026-10-22. Execution qualification remains separate.
 // A direct pnpm advisory floor alone does not cover bundled dependencies.
 // https://github.com/pnpm/pnpm/security/advisories/GHSA-c59q-g84q-2gj5
 export function pnpmVersionError(version) {
   const match = typeof version === 'string' && /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(version);
   if (!match) return 'pnpm must report an exact stable version.';
   const [major] = match.slice(1).map(Number);
-  if (major !== 11) return `pnpm ${version} is outside the reviewed 11.x release line.`;
-  if (version !== '11.28.6') return `pnpm ${version} is outside the reviewed artifact version 11.28.6.`;
+  if (major !== 10) return `pnpm ${version} is outside the reviewed 10.x release line.`;
+  if (version !== '10.34.7') return `pnpm ${version} is outside the reviewed artifact version 10.34.7.`;
   return null;
 }
 
