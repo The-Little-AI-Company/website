@@ -53,6 +53,21 @@ export function validateAuditInput(lockBytes, manifest) {
   return {lockSha256: hash, packageIdentities: PACKAGE_IDENTITIES};
 }
 
+// Fixed keys and bounded integer values only. Never print raw metadata or report text.
+function describeAuditCounts(metadata) {
+  const describe = key => {
+    if (!Object.hasOwn(metadata, key)) return {kind: 'absent'};
+    const value = metadata[key];
+    if (Number.isSafeInteger(value) && value >= 0 && value <= 1000000) {
+      return {kind: 'bounded-integer', value};
+    }
+    return {kind: value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value};
+  };
+  return {schema: 'company-native-audit-count-mismatch-v1', expectedPackageIdentities: PACKAGE_IDENTITIES,
+    totalDependencies: describe('totalDependencies'), dependencies: describe('dependencies'),
+    devDependencies: describe('devDependencies'), optionalDependencies: describe('optionalDependencies')};
+}
+
 export function validateAuditReport(text) {
   const report = parseReport(text);
   if (!plain(report) || report.error || !plain(report.advisories) || Object.keys(report.advisories).length) {
@@ -68,7 +83,7 @@ export function validateAuditReport(text) {
       || Object.values(metadata.vulnerabilities).some(value => value !== 0)) {
     throw Error('All five native audit severity counts must be present and zero.');
   }
-  if (metadata.totalDependencies !== PACKAGE_IDENTITIES) throw Error('Native audit does not acknowledge the complete403-identity input.');
+  if (metadata.totalDependencies !== PACKAGE_IDENTITIES) throw Error('Native audit does not acknowledge the complete403-identity input. ' + JSON.stringify(describeAuditCounts(metadata)));
   for (const key of ['dependencies', 'devDependencies', 'optionalDependencies']) {
     if (!Number.isSafeInteger(metadata[key]) || metadata[key] < 0 || metadata[key] > PACKAGE_IDENTITIES) {
       throw Error('Invalid native audit dependency counts.');

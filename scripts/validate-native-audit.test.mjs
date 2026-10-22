@@ -113,3 +113,22 @@ trusted_pnpm audit --json --audit-level=low
     assert.deepEqual(failed.stderr.trim().split(/\r?\n/), guards.slice(0, index + 1).map(p => 'guard:' + p));
   }
 });
+
+test('count mismatch diagnostics stay bounded and nonsecret without weakening403', () => {
+  const prefix = 'Native audit does not acknowledge the complete403-identity input. ';
+  for (const value of [404, 0, '403', 'PRIVATE_MARKER\n::notice::injected', null, {PRIVATE_MARKER: true}, ['PRIVATE_MARKER'], 1000001]) {
+    const copy = structuredClone(report);
+    copy.metadata.totalDependencies = value;
+    copy.metadata.PRIVATE_MARKER = 'must not be printed';
+    let rejected;
+    try {validateAuditReport(JSON.stringify(copy));} catch (error) {rejected = error;}
+    assert.ok(rejected, 'Mismatched count must remain a failure');
+    assert.ok(rejected.message.startsWith(prefix));
+    assert.ok(Buffer.byteLength(rejected.message) <= 1024);
+    assert.equal(rejected.message.includes('PRIVATE_MARKER'), false);
+    assert.equal(rejected.message.includes('::notice::'), false);
+    assert.equal(rejected.message.includes('\n'), false);
+    assert.equal(JSON.parse(rejected.message.slice(prefix.length)).expectedPackageIdentities, 403);
+  }
+  assert.equal(validateAuditReport(JSON.stringify(report)).packageIdentities, 403);
+});
