@@ -26,3 +26,11 @@ test('each layer stops before the next, leaving the job time to pack, upload and
 test('hosted Actions counts as CI inside the allowlisted container environment', () => {
   assert.match(playwright, /const CI = Boolean\(process\.env\.CI\) \|\| process\.env\.GITHUB_ACTIONS === 'true';/);
 });
+
+test('local test:node runs every Node policy suite the CI container runs', () => {
+  const entry = read('.github/actions/security-ci/entrypoint.sh');
+  const suites = /^    node --test (scripts\/\S+(?: scripts\/\S+)*)$/m.exec(entry)?.[1].split(' ') ?? [];
+  const local = JSON.parse(read('package.json')).scripts['test:node'].split(' ').slice(2);
+  assert.ok(suites.length > 0, 'the CI Node suite list was not found');
+  assert.deepEqual(suites.filter(suite => !local.includes(suite)), []);
+});

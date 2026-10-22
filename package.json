@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "astro dev",
     "check:node": "node scripts/check-node-version.mjs",
-    "test:node": "node --test scripts/check-node-version.test.mjs scripts/check-pnpm-version.test.mjs scripts/check-container-ci.test.mjs scripts/check-ci-timeouts.test.mjs scripts/check-checkout-bootstrap.test.mjs scripts/check-browser-policy.test.mjs",
+    "test:node": "node --test scripts/check-node-version.test.mjs scripts/check-pnpm-version.test.mjs scripts/check-container-ci.test.mjs scripts/check-ci-timeouts.test.mjs scripts/check-checkout-bootstrap.test.mjs scripts/check-os-image-policy.test.mjs scripts/check-browser-policy.test.mjs scripts/validate-native-audit.test.mjs",
     "check:pnpm": "node scripts/check-pnpm-version.mjs",
     "audit:deps": "pnpm audit --audit-level=low",
     "build": "node scripts/check-node-version.mjs && node scripts/check-pnpm-version.mjs && pnpm audit:deps && astro build",
