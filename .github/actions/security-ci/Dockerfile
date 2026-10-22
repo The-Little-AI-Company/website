@@ -40,4 +40,6 @@ COPY validate-native-audit.mjs /opt/company/validate-native-audit.mjs
 ENV PATH=/opt/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
     NODE_USE_SYSTEM_CA=1 \
     npm_config_manage_package_manager_versions=false
-ENTRYPOINT ["/bin/bash", "-p", "/opt/company/entrypoint.sh"]
+# Killing the docker CLI on a step timeout does not stop a daemon-owned container, and a
+# bash PID 1 ignores unhandled signals. timeout bounds the run itself and forwards signals.
+ENTRYPOINT ["/usr/bin/timeout", "--kill-after=20s", "16m", "/bin/bash", "-p", "/opt/company/entrypoint.sh"]

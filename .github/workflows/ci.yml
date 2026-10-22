@@ -245,7 +245,7 @@ jobs:
       - name: Type check, build, audit and test without runtime credentials
         id: verify
         # Fail this step, not the job, so the report, upload and cleanup steps still run.
-        timeout-minutes: 20
+        timeout-minutes: 18
         shell: bash --noprofile --norc -p -e -o pipefail {0}
         env:
           PRIVATE_DIRECTORY: ${{ steps.prepare.outputs.directory }}
