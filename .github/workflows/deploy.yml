@@ -245,7 +245,7 @@ jobs:
           NODE_PATH: ''
       - name: Type check, build, audit and test without runtime credentials
         id: verify
-        # Fail this step, not the job, so the always() cleanup still runs.
+        # Fail this step, not the job, so the final cleanup step still runs.
         timeout-minutes: 18
         shell: bash --noprofile --norc -p -e -o pipefail {0}
         env:
