@@ -34,3 +34,16 @@ test('local test:node runs every Node policy suite the CI container runs', () =>
   assert.ok(suites.length > 0, 'the CI Node suite list was not found');
   assert.deepEqual(suites.filter(suite => !local.includes(suite)), []);
 });
+
+test('the managed Chrome gets writable XDG directories although the image keeps XDG_CONFIG_HOME read-only', () => {
+  const entry = read('.github/actions/security-ci/entrypoint.sh');
+  assert.match(entry, /export HOME="\$private_home" XDG_CONFIG_HOME=\/opt\/company\/empty-config/);
+  assert.match(playwright, /const browserHome = managedBrowser \? mkdtempSync\(join\(tmpdir\(\), 'company-chrome-'\)\) : '';/);
+  assert.match(playwright, /XDG_CONFIG_HOME: join\(browserHome, 'config'\), XDG_CACHE_HOME: join\(browserHome, 'cache'\)/);
+  assert.match(playwright, /channel: 'chrome' as const, launchOptions: \{ env: \{ \.\.\.process\.env, \.\.\.browserXdg \} \}/);
+});
+
+test('a systemic CI failure stops early instead of tracing every test', () => {
+  const failures = Number(/maxFailures: CI \? (\d+) : 0,/.exec(playwright)?.[1]);
+  assert.ok(failures > 0 && failures <= 25, `maxFailures in CI should be a small positive number, got ${failures}`);
+});

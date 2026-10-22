@@ -1,5 +1,7 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { defineConfig, devices } from '@playwright/test';
 
 const PORT = Number(process.env.E2E_PORT ?? 4400);
@@ -8,7 +10,14 @@ const CI = Boolean(process.env.CI) || process.env.GITHUB_ACTIONS === 'true';
 // Hosted CI uses only the authenticated immutable Chrome Stable image installation.
 const managedBrowser = process.env.GITHUB_ACTIONS === 'true' || existsSync('/opt/company/browser-policy.json');
 if (managedBrowser) execFileSync('/opt/node/bin/node', ['/opt/company/check-browser-policy.mjs'], { stdio: 'inherit', timeout: 10000 });
-const browserChannel = managedBrowser ? { channel: 'chrome' as const } : {};
+// The CI image keeps XDG_CONFIG_HOME read-only so the package manager config cannot change. Chrome keeps its
+// crash database there and exits at launch without it, so only the managed browser gets fresh writable XDG directories.
+const browserHome = managedBrowser ? mkdtempSync(join(tmpdir(), 'company-chrome-')) : '';
+const browserXdg = { XDG_CONFIG_HOME: join(browserHome, 'config'), XDG_CACHE_HOME: join(browserHome, 'cache') };
+if (managedBrowser) for (const directory of Object.values(browserXdg)) mkdirSync(directory, { mode: 0o700 });
+const browserChannel = managedBrowser
+  ? { channel: 'chrome' as const, launchOptions: { env: { ...process.env, ...browserXdg } } }
+  : {};
 const SCREENSHOTS = '**/screenshots.spec.ts';
 
 // End-to-end tests drive the built site through `astro preview`, so the site has to be built first.
@@ -24,6 +33,8 @@ export default defineConfig({
   retries: 0, // a flaky test is a bug in the test
   // Stop well inside the 25-minute job so the report is written, packed and uploaded.
   globalTimeout: CI ? 14 * 60_000 : 0,
+  // A broken browser or server fails every test. Stop early so the report stays small enough to pack and upload.
+  maxFailures: CI ? 10 : 0,
   // CI keeps a report and a trace of every failure, which its workflow uploads. Locally the list is enough.
   reporter: CI ? [['list'], ['html', { open: 'never' }]] : 'list',
   outputDir: 'test-results',
