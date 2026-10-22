@@ -1,0 +1,23 @@
+name: Company runtime credential handoff
+description: Capture only the official artifact and optional OIDC runtime values after dropping all privileges.
+inputs:
+  directory:
+    description: Fresh native-owned private directory inside runner temporary storage.
+    required: true
+  scope:
+    description: artifact or deploy.
+    required: true
+runs:
+  using: docker
+  image: Dockerfile
+  args:
+    - --reuid=1001
+    - --regid=65534
+    - --clear-groups
+    - --bounding-set=-all
+    - --inh-caps=-all
+    - --ambient-caps=-all
+    - --no-new-privs
+    - /bin/bash
+    - -p
+    - /opt/company/capture-runtime.sh

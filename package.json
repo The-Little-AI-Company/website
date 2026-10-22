@@ -3,35 +3,39 @@
   "type": "module",
   "version": "1.0.0",
   "private": true,
-  "packageManager": "pnpm@11.9.0",
+  "packageManager": "pnpm@10.34.7",
   "engines": {
-    "node": ">=22.12.0"
+    "node": "^22.23.4 || ^24.22.1 || ^26.12.1"
   },
   "scripts": {
     "dev": "astro dev",
-    "build": "astro build",
+    "check:node": "node scripts/check-node-version.mjs",
+    "test:node": "node --test scripts/check-node-version.test.mjs scripts/check-pnpm-version.test.mjs scripts/check-container-ci.test.mjs scripts/check-ci-timeouts.test.mjs scripts/check-checkout-bootstrap.test.mjs scripts/check-os-image-policy.test.mjs scripts/check-browser-policy.test.mjs scripts/validate-native-audit.test.mjs",
+    "check:pnpm": "node scripts/check-pnpm-version.mjs",
+    "audit:deps": "pnpm audit --audit-level=low",
+    "build": "node scripts/check-node-version.mjs && node scripts/check-pnpm-version.mjs && pnpm audit:deps && astro build",
     "preview": "astro preview",
     "check": "astro check --minimumFailingSeverity hint",
     "test": "vitest run",
     "test:e2e": "playwright test --project=chromium",
-    "verify": "pnpm check && pnpm build && pnpm test && pnpm test:e2e",
+    "verify": "pnpm check:node && pnpm test:node && pnpm check && pnpm build && pnpm test && pnpm test:e2e",
     "images": "node scripts/images.mjs",
     "og": "node scripts/og.mjs",
     "icons": "node scripts/icons.mjs",
     "screenshots": "playwright test --project=screenshots"
   },
   "dependencies": {
-    "astro": "^7.0.3"
+    "astro": "7.3.3"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.9",
     "@axe-core/playwright": "^4.13.0",
-    "@playwright/test": "1.56.1",
+    "@playwright/test": "1.64.1",
     "@types/node": "^26.0.1",
     "html-validate": "^11.16.2",
     "node-html-parser": "^9.0.4",
-    "sharp": "0.34.5",
+    "sharp": "0.35.5",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.9"
+    "vitest": "4.1.12"
   }
 }

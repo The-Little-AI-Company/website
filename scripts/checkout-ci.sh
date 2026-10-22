@@ -1,0 +1,187 @@
+#!/usr/bin/env bash
+set -euo pipefail
+set +x
+native_checkout_failed() {
+  local status=$?
+  printf '::error::Native checkout preflight failed: %s\n' "$1" >&2
+  exit "$status"
+}
+test -z "${LD_PRELOAD:-}${LD_LIBRARY_PATH:-}${LD_AUDIT:-}${GLIBC_TUNABLES:-}${BASH_ENV:-}${ENV:-}${NODE_OPTIONS:-}${NODE_PATH:-}" || native_checkout_failed 'runtime environment overrides are nonempty'
+printf 'Native checkout UID: %s\n' "$(id -u)"
+test "$(id -u)" = 1001 || native_checkout_failed 'runner UID must be 1001'
+printf 'Native checkout workspace owner UID: %s\n' "$(stat -c %u "${GITHUB_WORKSPACE:?}")"
+test "$(stat -c %u "${GITHUB_WORKSPACE:?}")" = 1001 || native_checkout_failed 'workspace owner UID must be 1001'
+
+# No JavaScript action, host Git network request or project code runs here.
+test "${RUNNER_ENVIRONMENT:-}" = github-hosted || native_checkout_failed 'runner must be GitHub hosted'
+test "${RUNNER_OS:-}" = Linux || native_checkout_failed 'runner OS must be Linux'
+test "${RUNNER_ARCH:-}" = X64 || native_checkout_failed 'runner architecture must be X64'
+test "${GITHUB_SERVER_URL:-}" = https://github.com || native_checkout_failed 'GitHub server must be https://github.com'
+test "${GITHUB_REPOSITORY:-}" = The-Little-AI-Company/website || native_checkout_failed 'repository must be The-Little-AI-Company/website'
+[[ "${EXPECTED_SHA:-}" =~ ^[a-f0-9]{40}$ ]] || native_checkout_failed 'expected SHA must contain 40 lowercase hexadecimal characters'
+test -z "${ACTIONS_RUNNER_HOOK_JOB_STARTED:-}${ACTIONS_RUNNER_HOOK_JOB_COMPLETED:-}" || native_checkout_failed 'runner job hooks are nonempty'
+grep --quiet --fixed-strings 'VERSION_ID="24.04"' /etc/os-release || native_checkout_failed 'runner OS release must be Ubuntu 24.04'
+test -z "${GIT_SSL_NO_VERIFY:-}${GIT_SSL_CAINFO:-}${CURL_CA_BUNDLE:-}${SSL_CERT_FILE:-}${SSL_CERT_DIR:-}" || native_checkout_failed 'TLS override environment is nonempty'
+test -z "${DOCKER_HOST:-}${DOCKER_CONTEXT:-}${DOCKER_CONFIG:-}${DOCKER_TLS_VERIFY:-}${DOCKER_CERT_PATH:-}${DOCKER_API_VERSION:-}${DOCKER_AUTH_CONFIG:-}${BUILDX_BUILDER:-}${BUILDKIT_HOST:-}" || native_checkout_failed 'Docker environment overrides are nonempty'
+
+assert_checkout_directory() {
+  local candidate=$1
+  case "$candidate" in /*) ;; *) return 1 ;; esac
+  case "$candidate" in *','*|*':'*|*$'\n'*|*$'\r'*) return 1 ;; esac
+  test -d "$candidate" && test ! -L "$candidate" || return 1
+  test "$(readlink -f -- "$candidate")" = "$candidate" || return 1
+  test "$(stat -c %u "$candidate")" = 1001 || return 1
+  test -z "$(find "$candidate" -maxdepth 0 -perm /022 -print)"
+}
+: "${GITHUB_WORKSPACE:?The hosted workspace is required.}"
+: "${RUNNER_TEMP:?The hosted temporary directory is required.}"
+: "${CI_CHECKOUT_TOKEN:?The scoped workflow token is required.}"
+workspace=$GITHUB_WORKSPACE
+runner_temp=$RUNNER_TEMP
+assert_checkout_directory "$workspace" || native_checkout_failed 'workspace must be a canonical private directory owned by UID 1001'
+assert_checkout_directory "$runner_temp" || native_checkout_failed 'runner temp must be a canonical private directory owned by UID 1001'
+cd -- "$workspace" || native_checkout_failed 'cannot enter the hosted workspace'
+test -z "$(find . -mindepth 1 -maxdepth 1 -print -quit)" || native_checkout_failed 'hosted workspace must be empty'
+test -x /usr/bin/docker && test -S /var/run/docker.sock || native_checkout_failed 'native Docker CLI and local Unix daemon are required'
+umask 077
+bootstrap=$(mktemp -d "$runner_temp/company-checkout.XXXXXXXX")
+cleanup_checkout() {
+  unset CI_CHECKOUT_TOKEN
+  case "$bootstrap" in "$runner_temp"/company-checkout.*) test ! -L "$bootstrap" && rm -rf -- "$bootstrap" ;; *) return 1 ;; esac
+}
+trap cleanup_checkout EXIT
+mkdir -- "$bootstrap/context" "$bootstrap/docker-home" "$bootstrap/docker-config"
+context=$bootstrap/context
+test -z "$(find "$context" -mindepth 1 -maxdepth 1 -print -quit)"
+
+# Only these two literal files enter the new, empty build context.
+cat > "$context/Dockerfile" <<'COMPANY_CHECKOUT_DOCKERFILE'
+FROM docker.io/library/ubuntu@sha256:33ceb71981b602c1a7443a53469e4dba065f7503eab3078a2d7a57a2ab987517
+ENV DEBIAN_FRONTEND=noninteractive
+RUN test "$(dpkg --print-architecture)" = amd64 \
+ && grep --quiet --fixed-strings 'VERSION_ID="24.04"' /etc/os-release \
+ && rm -f /etc/apt/sources.list /etc/apt/sources.list.d/* \
+ && printf '%s\n' 'Types: deb' 'URIs: http://archive.ubuntu.com/ubuntu' 'Suites: noble noble-updates' 'Components: main' 'Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg' '' 'Types: deb' 'URIs: http://security.ubuntu.com/ubuntu' 'Suites: noble-security' 'Components: main' 'Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg' > /etc/apt/sources.list.d/ubuntu.sources \
+ && printf '%s\n' 'Acquire::AllowInsecureRepositories "false";' 'Acquire::AllowDowngradeToInsecureRepositories "false";' 'Acquire::Check-Valid-Until "true";' 'APT::Get::AllowUnauthenticated "false";' > /etc/apt/apt.conf.d/99company-authentication \
+ && apt-get update --error-on=any \
+ && mkdir -m 0755 /var/cache/company-checkout-archives \
+ && apt-get -o Dir::Cache::archives=/var/cache/company-checkout-archives install --download-only --reinstall --yes --no-install-recommends ca-certificates=20260816ubuntu0.24.04.1 libc6 libc-bin libssl3t64 openssl git \
+ && test -f /var/cache/company-checkout-archives/ca-certificates_20260816ubuntu0.24.04.1_all.deb \
+ && test ! -L /var/cache/company-checkout-archives/ca-certificates_20260816ubuntu0.24.04.1_all.deb \
+ && test "$(stat -c %s /var/cache/company-checkout-archives/ca-certificates_20260816ubuntu0.24.04.1_all.deb)" = 138884 \
+ && printf '%s  %s\n' 8a0a754aaafed72cc8efb8c1731808133284a84fbfc76a4fcc73fce9e01b4187 /var/cache/company-checkout-archives/ca-certificates_20260816ubuntu0.24.04.1_all.deb | sha256sum --check --strict --status \
+ && apt-get -o Dir::Cache::archives=/var/cache/company-checkout-archives install --no-download --reinstall --yes --no-install-recommends ca-certificates=20260816ubuntu0.24.04.1 libc6 libc-bin libssl3t64 openssl git \
+ && apt-mark hold ca-certificates \
+ && apt-get upgrade --with-new-pkgs --yes --no-install-recommends \
+ && test "$(dpkg-query --show --showformat='${Version}' ca-certificates)" = 20260816ubuntu0.24.04.1 \
+ && dpkg --compare-versions "$(dpkg-query --show --showformat='${Version}' libc6)" ge 2.39-0ubuntu8.9 \
+ && dpkg --compare-versions "$(dpkg-query --show --showformat='${Version}' libc-bin)" ge 2.39-0ubuntu8.9 \
+ && dpkg --compare-versions "$(dpkg-query --show --showformat='${Version}' libssl3t64)" ge 3.0.13-0ubuntu3.16 \
+ && dpkg --compare-versions "$(dpkg-query --show --showformat='${Version}' openssl)" ge 3.0.13-0ubuntu3.16 \
+ && dpkg-query --show --showformat='${binary:Package}\t${Version}\t${Architecture}\t${Status}\n' \
+ && rm -rf /var/lib/apt/lists/* /var/cache/company-checkout-archives
+COPY checkout.sh /opt/company/checkout.sh
+RUN chmod 0444 /opt/company/checkout.sh
+ENV PATH=/usr/bin:/bin HOME=/tmp/home GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/bin/false SSH_ASKPASS=/bin/false
+USER 1001:65534
+WORKDIR /workspace
+ENTRYPOINT ["/bin/bash", "-p", "/opt/company/checkout.sh"]
+COMPANY_CHECKOUT_DOCKERFILE
+cat > "$context/checkout.sh" <<'COMPANY_CHECKOUT_HELPER'
+#!/usr/bin/env bash
+set -euo pipefail
+set +x
+test "$(id -u)" = 1001
+test "$(id -g)" = 65534
+test "$(id -G)" = 65534
+for key in CapEff CapPrm CapInh CapAmb CapBnd; do
+  test "$(awk -v key="$key:" '$1 == key {print $2}' /proc/self/status)" = 0000000000000000
+done
+test "$(awk '$1 == "NoNewPrivs:" {print $2}' /proc/self/status)" = 1
+test ! -e /var/run/docker.sock
+test -z "${LD_PRELOAD:-}${LD_LIBRARY_PATH:-}${LD_AUDIT:-}${GLIBC_TUNABLES:-}${BASH_ENV:-}${ENV:-}${NODE_OPTIONS:-}${NODE_PATH:-}"
+test -z "${GIT_SSL_NO_VERIFY:-}${GIT_SSL_CAINFO:-}${CURL_CA_BUNDLE:-}${SSL_CERT_FILE:-}${SSL_CERT_DIR:-}"
+[[ "${EXPECTED_SHA:-}" =~ ^[a-f0-9]{40}$ ]]
+cd -- /workspace
+test "$(stat -c %u .)" = 1001
+test -z "$(find . -mindepth 1 -maxdepth 1 -print -quit)"
+
+# BEGIN COMPANY OS PACKAGE GUARD
+test "$(dpkg --print-architecture)" = amd64
+grep --quiet --fixed-strings 'VERSION_ID="24.04"' /etc/os-release
+assert_os_floor() {
+  local package=$1 minimum=$2 installed status
+  status=$(dpkg-query --show --showformat='${Status}' "$package")
+  test "$status" = 'install ok installed'
+  installed=$(dpkg-query --show --showformat='${Version}' "$package")
+  dpkg --compare-versions "$installed" ge "$minimum" || { printf '::error::OS package %s is below required floor %s\n' "$package" "$minimum" >&2; return 1; }
+}
+assert_os_floor libc6 2.39-0ubuntu8.9
+assert_os_floor libc-bin 2.39-0ubuntu8.9
+assert_os_floor libssl3t64 3.0.13-0ubuntu3.16
+assert_os_floor openssl 3.0.13-0ubuntu3.16
+printf '%s\n' 'BEGIN COMPANY INSTALLED OS PACKAGE INVENTORY'
+dpkg-query --show --showformat='${binary:Package}\t${Version}\t${Architecture}\t${Status}\n'
+printf '%s\n' 'END COMPANY INSTALLED OS PACKAGE INVENTORY'
+# END COMPANY OS PACKAGE GUARD
+
+# Enforce the unchanged CA floor before the first Git process or token use.
+ca_version=$(dpkg-query --show --showformat='${Version}' ca-certificates)
+printf 'Container checkout CA package: %s\n' "$ca_version"
+dpkg --compare-versions "$ca_version" ge 20260816ubuntu0.24.04.1 || { printf '%s\n' '::error::Container checkout CA package must meet floor 20260816ubuntu0.24.04.1' >&2; exit 1; }
+test -s /etc/ssl/certs/ca-certificates.crt
+test "$(stat -c %u /etc/ssl/certs/ca-certificates.crt)" = 0
+# Ubuntu Git's actual HTTPS helper must link to the system GnuTLS backend.
+backend=$(ldd /usr/lib/git-core/git-remote-https)
+grep --quiet --fixed-strings 'libcurl-gnutls.so.4' <<< "$backend"
+grep --quiet --fixed-strings 'libgnutls.so.30' <<< "$backend"
+unset backend
+mkdir -- /tmp/home
+export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_COUNT=0
+export GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/bin/false SSH_ASKPASS=/bin/false HOME=/tmp/home
+trusted_git() {
+  /usr/bin/git -c credential.helper= -c core.hooksPath=/dev/null -c init.templateDir= \
+    -c http.sslVerify=true -c http.sslBackend=gnutls \
+    -c http.sslCAInfo=/etc/ssl/certs/ca-certificates.crt -c http.followRedirects=false \
+    -c protocol.allow=never -c protocol.https.allow=always \
+    -c fetch.fsckObjects=true -c transfer.fsckObjects=true "$@"
+}
+: "${CI_CHECKOUT_TOKEN:?The scoped workflow token is required.}"
+trap 'unset CI_CHECKOUT_TOKEN auth' EXIT
+trusted_git init --quiet .
+trusted_git remote add origin https://github.com/The-Little-AI-Company/website.git
+# The token and derived header are never command arguments, output or saved config.
+auth=$(printf 'x-access-token:%s' "$CI_CHECKOUT_TOKEN" | base64 -w 0)
+GIT_CONFIG_COUNT=1 \
+GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
+GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" \
+trusted_git fetch --quiet --no-tags --depth=1 --no-recurse-submodules origin "$EXPECTED_SHA"
+unset CI_CHECKOUT_TOKEN auth
+trusted_git checkout --quiet --detach FETCH_HEAD
+test "$(trusted_git rev-parse HEAD)" = "$EXPECTED_SHA"
+printf 'Checked out exact event commit %s without persistent credentials.\n' "$EXPECTED_SHA"
+COMPANY_CHECKOUT_HELPER
+
+docker_native() (
+  # Clear all inherited exports without ever placing a token in an env command.
+  local name
+  while IFS= read -r name; do export -n "$name"; done < <(compgen -e)
+  export PATH=/usr/bin:/bin HOME="$bootstrap/docker-home" DOCKER_CONFIG="$bootstrap/docker-config" DOCKER_BUILDKIT=0
+  if test "$1" = run; then export CI_CHECKOUT_TOKEN; fi
+  exec /usr/bin/docker --host=unix:///var/run/docker.sock "$@"
+)
+# The public base is content-addressed. This does not repair the host CA store.
+docker_native build --pull --no-cache --platform linux/amd64 \
+  --iidfile "$bootstrap/image-id" --file "$context/Dockerfile" "$context"
+image=$(cat "$bootstrap/image-id")
+[[ "$image" =~ ^sha256:[a-f0-9]{64}$ ]]
+# Recheck the sole host bind immediately before the frozen image receives it.
+assert_checkout_directory "$workspace"
+test -z "$(find "$workspace" -mindepth 1 -maxdepth 1 -print -quit)"
+docker_native run --rm --pull=never --platform linux/amd64 \
+  --user 1001:65534 --read-only --cap-drop=ALL --security-opt=no-new-privileges \
+  --pids-limit=128 --memory=512m --cpus=2 --network=bridge \
+  --tmpfs /tmp:rw,nosuid,nodev,noexec,size=64m,mode=1777 \
+  --mount "type=bind,src=$workspace,dst=/workspace" --workdir=/workspace \
+  --env CI_CHECKOUT_TOKEN --env "EXPECTED_SHA=$EXPECTED_SHA" "$image"
+unset CI_CHECKOUT_TOKEN

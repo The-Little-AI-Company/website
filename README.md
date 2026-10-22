@@ -16,60 +16,66 @@ no JavaScript, no cookies, and no third-party requests.
 
 ## Work on it
 
-```sh
-pnpm install
-pnpm dev
-```
+Use a reviewed disposable build container. The temporary CI pins Node.js 24.22.1
+and pnpm 10.34.7. Its browser policy pins Playwright 1.64.1 and Chrome for Testing
+156.0.8078.47. Use the authenticated artifacts and applicable approval scope
+recorded in the security review. A version declaration alone is insufficient.
 
-The dev server runs at `http://127.0.0.1:4399`.
+After the qualified installation, run `pnpm dev` and open
+http://127.0.0.1:4399. This address and port come from `astro.config.mjs`.
+Run `pnpm check:node` and `pnpm test:node` to check the runtime policy without
+installing dependencies. The complete check remains `pnpm verify`: runtime
+controls, strict Astro checks, a guarded build, `pnpm test` and Playwright tests.
 
-| Command | What it does |
-| --- | --- |
-| `pnpm dev` | Runs the dev server at `http://127.0.0.1:4399`. |
-| `pnpm build` | Builds the static site into `dist/`. |
-| `pnpm preview` | Serves the built `dist/`. |
-| `pnpm check` | Runs `astro check`. Hints count as failures. |
-| `pnpm test` | Runs the unit tests. They read `dist/`, so run `pnpm build` first, and again after any change to `src/` or `public/`. A stale build stops the run and says so. |
-| `pnpm test:e2e` | Runs the Playwright checks (the `chromium` project) against `astro preview` on port `E2E_PORT` (default 4400). It needs a build too. |
-| `pnpm verify` | Runs `check`, `build`, `test` and `test:e2e`, in that order. |
-| `pnpm screenshots` | Runs the `screenshots` Playwright project, which writes full-page screenshots of every page, at 360 and 1280 pixels in both color schemes, to `test-results/screenshots/`. They are for review, not baselines. |
-| `pnpm images` | Writes the smaller WebP copies in `public/images/` that `srcset` serves to narrow screens. Run it after replacing a source image. |
-| `pnpm og` | Renders the social card, `public/og.png`. |
-| `pnpm icons` | Renders the app icons under `public/`. |
+The guard checks the executable's actual `process.versions.node`. It rejects
+unsupported release lines, prereleases, versions below the
+[October 21, 2026 security releases](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases)
+and lines that reach their
+[scheduled end of life](https://github.com/nodejs/Release/blob/main/schedule.json).
+The accepted floors are 22.23.4, 24.22.1 and 26.12.1. Update the policy and CI pins
+when a later advisory changes them.
 
-The end-to-end tests check every page at several widths from 320 to 1440 pixels,
-in both color schemes. The same checks run in GitHub Actions on every pull
-request (`.github/workflows/ci.yml`). When they fail there, the workflow keeps
-the Playwright report and the traces of the failed tests for a week, as the
-`playwright-results` artifact of the run.
+The CI uses three images: native exact-commit checkout, application verification
+and runtime-credential handoff. Their builds receive no credentials, build secrets
+or credential mounts. The verifier receives read-only source and private writable
+data. Its root filesystem and image-owned runtime, manager and policy files are
+read-only. It runs without capabilities or a Docker socket and receives no checkout,
+artifact or OIDC runtime credentials.
 
-### Browsers
+Checkout credentials enter only the checkout container at runtime. The separate
+handoff action initially receives GitHub's supported runtime values and the
+runner-provided socket mount. Its image-owned `setpriv` entrypoint drops privileges
+before the capture script reads those values. That script requires zero
+capabilities, no new privileges and no socket write access. The host runner and
+Docker daemon remain trusted.
 
-Locally, the Playwright tests do not download a browser. They use the Chromium
-that `PLAYWRIGHT_BROWSERS_PATH` points at. On a machine without one, run
-`pnpm exec playwright install chromium` once. CI installs its own.
+The images use the pinned Ubuntu base, signed official Ubuntu package chains and
+an installed package inventory. Bootstrap verifies the approved Node archive and
+extracts only its executable. It never activates bundled npm, Corepack or Yarn.
+The pnpm archive, browser archive and extracted payloads retain their integrity
+and path checks. Every manager phase checks its fixed runtime and project inputs.
 
-Two dependencies are pinned to an exact version, each for a reason:
+The audit includes development dependencies. Its strict schema distinguishes
+403 locked package identities from 405 native audit-tree entries. Passing that
+schema or seeing an empty finding list does not prove actual request coverage or
+complete clearance against current vendor advisories. The manager's bundled
+dependencies and the fixed command/configuration paths need their own reviewed
+dispositions. Do not substitute another pnpm version or apply those dispositions
+to arbitrary repositories.
 
-- `@playwright/test` is `1.56.1`, the release that matches the Chromium build
-  pre-installed here. A Playwright release is tested against one Chromium build,
-  so bump the two together. CI installs the matching one with
-  `playwright install chromium`.
-- `sharp` is `0.34.5`, the version Astro already installs for its image service,
-  so pnpm keeps a single copy. `pnpm images` and `pnpm icons` write files that
-  are committed, and the PNG decoder in the tests is checked against sharp. A
-  different libvips can encode different bytes, so a bump changes those files
-  without anyone editing their source. Move it together with Astro, then run
-  `pnpm images` and `pnpm icons` and commit what changes.
+Artifact packing runs before upload credentials are supplied and rejects
+symlinks, hardlinks, special files and paths outside the output tree. The separate
+uploader receives only a prepared regular archive read-only. The deploy client
+receives no project mount. Neither client receives the host Docker socket.
+Private credentials and container data are removed after use, including failures.
 
-### The social card and the icons
-
-`public/og.png` is generated. To change it, edit the card in `scripts/og.mjs`
-(or the tokens or the mark it reads), then run `pnpm og`. The script renders the
-card in Chromium at 1200 by 630 pixels. Commit the PNG together with the script.
-
-The app icons, `apple-touch-icon.png`, `icon-192.png` and `icon-512.png`, are
-exports of the same mark. Run `pnpm icons` after changing the mark.
+The October 22 CI approvals cover exact reviewed test attempts. Fresh artifact
+OIDC/build-provenance verification remains incomplete under those scoped
+exceptions. Native image construction, launcher and handoff definitions are still
+controlled by the source under review. A trusted control boundary remains a merge
+blocker. These test approvals do not authorize arbitrary PR execution, merge,
+Pages publication, host runtime activation or persistent trust changes. Provider
+job hooks also remain outside a workflow step's control.
 
 ## Where things live
 
