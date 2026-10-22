@@ -3,7 +3,7 @@ import {lstatSync, readFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {pathToFileURL} from 'node:url';
 
-export const LOCK_SHA256 = '54de17de0e3e513d91a57731af56c06f7627d4cb7fbe246dee32e0d2b94b92f5';
+export const LOCK_SHA256 = 'dadf0084134f00d3ea28771fc01ac48e652729cd85a7eee504d5e6d06a29acdd';
 export const PACKAGE_IDENTITIES = 403;
 // 404 reachable package contexts plus the native importer wrapper.
 export const AUDIT_TREE_ENTRIES = 405;
