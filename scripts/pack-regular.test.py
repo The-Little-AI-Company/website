@@ -37,8 +37,8 @@ class RegularArtifactTests(unittest.TestCase):
         with patch.object(packer.os, 'O_NOFOLLOW', getattr(os, 'O_NOFOLLOW', 0), create=True):
             packer.pack_artifact(self.root, self.output, 'pages')
         with tarfile.open(self.output) as archive:
-            self.assertEqual(archive.getnames(), ['index.html'])
-            self.assertEqual(archive.extractfile('index.html').read(), b'A regular static page.')
+            self.assertEqual(archive.getnames(), ['./index.html'])
+            self.assertEqual(archive.extractfile('./index.html').read(), b'A regular static page.')
             self.assertTrue(all(member.isreg() or member.isdir() for member in archive.getmembers()))
 
     def test_rejects_symlink_root_and_hardlinked_file(self):

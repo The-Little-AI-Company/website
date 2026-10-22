@@ -39,7 +39,8 @@ def pack_artifact(source, destination, mode):
                     raise SystemExit('Artifact hardlinks are refused.')
                 if stat.S_ISREG(metadata.st_mode):
                     total += metadata.st_size
-                entries.append((path, (prefix + '/' + relative).removeprefix('./'), metadata))
+                # GitHub Pages rejects archive entries that do not start with ./ (actions/deploy-pages#203).
+                entries.append((path, prefix + '/' + relative, metadata))
                 if len(entries) > 30000 or total > 512 * 1024 * 1024:
                     raise SystemExit('Artifact exceeds its reviewed bounds.')
 
