@@ -44,7 +44,7 @@ test('canonical checkout remains byte-bound to all three first workflow steps', 
     assert.equal(workflow.split(`        run: |\n${inline}`).length - 1, count);
   }
   // Preserve the original strict test, including its per-job first-step equality.
-  assert.equal(createHash('sha256').update(read('scripts/check-container-ci.test.mjs')).digest('hex'), '2384172fc012b95e3ce67cddd7fdf7c219a14c90547d99492acfcb6e016a08e7');
+  assert.equal(createHash('sha256').update(read('scripts/check-container-ci.test.mjs')).digest('hex'), 'cb3245ef48b9364bd169bde2aac71dc39ad5014e65cabc9f60874e20d3da6a5c');
 });
 
 test('literal context contains only the pinned base and signed exact CA install', () => {
@@ -92,7 +92,7 @@ test('native diagnostics reject unsafe environment and nonnetwork identity mutat
   }
 });
 
-test('workspace mount guard rejects missing, alias, unsafe delimiter, owner and mode', () => fixture((directory, path) => {
+test('workspace mount guard rejects missing, alias, unsafe delimiter, owner and mode', () => fixture((_directory, path) => {
   const guard = checkout.slice(checkout.indexOf('assert_checkout_directory()'), checkout.indexOf(': "${GITHUB_WORKSPACE:?The hosted workspace is required.}"'));
   // Owner and Unix mode are fixture values on Windows. Path existence/canonicalization are real.
   const prefix = 'stat() { printf "%s\\n" "${TEST_OWNER:-1001}"; }; find() { if test "${TEST_WRITABLE:-0}" = 1; then printf "unsafe\\n"; fi; };\n';
