@@ -65,7 +65,7 @@ case "$mode" in
   verify)
     # Only these two mounts reach dependency/build/test code. No parent temp or commands/credentials.
     assert_private_mount "$directory/data" "$directory/data" "$uid"
-    docker "${common[@]}" --env INPUT_MODE=verify --env GITHUB_TOKEN \
+    docker "${common[@]}" --env INPUT_MODE=verify \
       --env RUNNER_TEMP=/github/runner_temp --env GITHUB_WORKSPACE=/github/runner_temp/work \
       --mount "type=bind,src=$workspace,dst=/source,readonly" \
       --mount "type=bind,src=$directory/data,dst=/github/runner_temp" \

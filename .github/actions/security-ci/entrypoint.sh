@@ -5,6 +5,25 @@ test "$(id -u)" != 0
 test "$(command -v node)" = /opt/node/bin/node
 test -z "${NODE_OPTIONS:-}${NODE_PATH:-}${NODE_EXTRA_CA_CERTS:-}${NODE_TLS_REJECT_UNAUTHORIZED:-}"
 test "${GITHUB_REPOSITORY:-}" = The-Little-AI-Company/website
+# BEGIN COMPANY OS PACKAGE GUARD
+test "$(dpkg --print-architecture)" = amd64
+grep --quiet --fixed-strings 'VERSION_ID="24.04"' /etc/os-release
+assert_os_floor() {
+  local package=$1 minimum=$2 installed status
+  status=$(dpkg-query --show --showformat='${Status}' "$package")
+  test "$status" = 'install ok installed'
+  installed=$(dpkg-query --show --showformat='${Version}' "$package")
+  dpkg --compare-versions "$installed" ge "$minimum" || { printf '::error::OS package %s is below required floor %s\n' "$package" "$minimum" >&2; return 1; }
+}
+assert_os_floor libc6 2.39-0ubuntu8.9
+assert_os_floor libc-bin 2.39-0ubuntu8.9
+assert_os_floor libssl3t64 3.0.13-0ubuntu3.16
+assert_os_floor openssl 3.0.13-0ubuntu3.16
+printf '%s\n' 'BEGIN COMPANY INSTALLED OS PACKAGE INVENTORY'
+dpkg-query --show --showformat='${binary:Package}\t${Version}\t${Architecture}\t${Status}\n'
+printf '%s\n' 'END COMPANY INSTALLED OS PACKAGE INVENTORY'
+# END COMPANY OS PACKAGE GUARD
+
 node /opt/company/check-node-version.mjs
 
 trusted_pnpm() {
@@ -26,11 +45,11 @@ upload() {
 
 case "${INPUT_MODE:-}" in
   verify)
-    test -z "${ACTIONS_RUNTIME_TOKEN:-}${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}${ACTIONS_ID_TOKEN_REQUEST_URL:-}"
+    test -z "${ACTIONS_RUNTIME_TOKEN:-}${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}${ACTIONS_ID_TOKEN_REQUEST_URL:-}${GITHUB_TOKEN:-}"
     test -z "$(find /github/runner_temp/work -mindepth 1 -maxdepth 1 -print -quit)"
     cp -a -- /source/. /github/runner_temp/work/
     cd -- /github/runner_temp/work
-    node --test scripts/check-node-version.test.mjs scripts/check-pnpm-version.test.mjs scripts/check-container-ci.test.mjs
+    node --test scripts/check-node-version.test.mjs scripts/check-pnpm-version.test.mjs scripts/check-container-ci.test.mjs scripts/check-os-image-policy.test.mjs
     python3 -I -B scripts/validate-pnpm-archive.test.py
     python3 -I -B scripts/pack-regular.test.py
     python3 -I -B scripts/check-ci-mount.test.py
