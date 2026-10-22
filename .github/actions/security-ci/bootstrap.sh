@@ -66,3 +66,6 @@ test ! -e /opt/node/bin/corepack
 test ! -e /opt/node/bin/yarn
 dpkg-query --show --showformat='${Package} ${Version}\n' ca-certificates curl python3 xz-utils git
 /opt/node/bin/node -p 'JSON.stringify({node:process.versions.node,openssl:process.versions.openssl,execPath:process.execPath})'
+
+# Authenticate the fixed Chrome ZIP before parsing. No browser runs during image preparation.
+python3 -I -S -B /opt/company/install-browser.py "$workdir"

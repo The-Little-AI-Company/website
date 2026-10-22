@@ -1,8 +1,13 @@
+import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { defineConfig, devices } from '@playwright/test';
 
 const PORT = Number(process.env.E2E_PORT ?? 4400);
 const CI = Boolean(process.env.CI);
+// Hosted CI uses only the authenticated immutable Chrome Stable image installation.
+const managedBrowser = process.env.GITHUB_ACTIONS === 'true' || existsSync('/opt/company/browser-policy.json');
+if (managedBrowser) execFileSync('/opt/node/bin/node', ['/opt/company/check-browser-policy.mjs'], { stdio: 'inherit', timeout: 10000 });
+const browserChannel = managedBrowser ? { channel: 'chrome' as const } : {};
 const SCREENSHOTS = '**/screenshots.spec.ts';
 
 // End-to-end tests drive the built site through `astro preview`, so the site has to be built first.
@@ -10,7 +15,7 @@ if (!existsSync(new URL('./dist/index.html', import.meta.url))) {
   throw new Error('dist/ is missing. Run `pnpm build` before `pnpm test:e2e`.');
 }
 
-// The tests use the Chromium that is already installed (PLAYWRIGHT_BROWSERS_PATH) and never download one.
+// Tests never download browsers. Hosted CI selects the checked Chrome Stable channel.
 export default defineConfig({
   testDir: 'tests/e2e',
   fullyParallel: true,
@@ -29,9 +34,9 @@ export default defineConfig({
   },
   projects: [
     // `pnpm test:e2e`: every check.
-    { name: 'chromium', testIgnore: SCREENSHOTS, use: { ...devices['Desktop Chrome'] } },
+    { name: 'chromium', testIgnore: SCREENSHOTS, use: { ...devices['Desktop Chrome'], screen: undefined, ...browserChannel } },
     // `pnpm screenshots`: full-page pictures for design review. They check nothing and take a while, so only this project runs them.
-    { name: 'screenshots', testMatch: SCREENSHOTS, use: { ...devices['Desktop Chrome'] } },
+    { name: 'screenshots', testMatch: SCREENSHOTS, use: { ...devices['Desktop Chrome'], screen: undefined, ...browserChannel } },
   ],
   webServer: {
     command: `pnpm exec astro preview --host 127.0.0.1 --port ${PORT}`,

@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "astro dev",
     "check:node": "node scripts/check-node-version.mjs",
-    "test:node": "node --test scripts/check-node-version.test.mjs scripts/check-pnpm-version.test.mjs scripts/check-container-ci.test.mjs",
+    "test:node": "node --test scripts/check-node-version.test.mjs scripts/check-pnpm-version.test.mjs scripts/check-container-ci.test.mjs scripts/check-browser-policy.test.mjs",
     "check:pnpm": "node scripts/check-pnpm-version.mjs",
     "audit:deps": "pnpm audit --audit-level=low",
     "build": "node scripts/check-node-version.mjs && node scripts/check-pnpm-version.mjs && pnpm audit:deps && astro build",
@@ -30,7 +30,7 @@
   "devDependencies": {
     "@astrojs/check": "^0.9.9",
     "@axe-core/playwright": "^4.13.0",
-    "@playwright/test": "1.56.1",
+    "@playwright/test": "1.64.1",
     "@types/node": "^26.0.1",
     "html-validate": "^11.16.2",
     "node-html-parser": "^9.0.4",

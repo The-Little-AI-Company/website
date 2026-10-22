@@ -26,7 +26,10 @@ RUN test "$(dpkg --print-architecture)" = amd64 \
 COPY bootstrap.sh /opt/company/bootstrap.sh
 COPY artifacts.json /opt/company/artifacts.json
 COPY validate-pnpm-archive.py /opt/company/validate-pnpm-archive.py
+COPY browser-policy.json /opt/company/browser-policy.json
+COPY install-browser.py /opt/company/install-browser.py
 RUN bash /opt/company/bootstrap.sh
+COPY check-browser-policy.mjs /opt/company/check-browser-policy.mjs
 COPY entrypoint.sh /opt/company/entrypoint.sh
 COPY check-node-version.mjs /opt/company/check-node-version.mjs
 COPY pack-regular.py /opt/company/pack-regular.py

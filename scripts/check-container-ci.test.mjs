@@ -113,7 +113,9 @@ test('scoped manager inputs, full audit and all site tests remain required', () 
   assert.match(entry, /test ! -e \.npmrc/);
   assert.match(entry, /npm_config_ignore_pnpmfile=true/);
   assert.ok(entry.indexOf('pnpm audit --audit-level=low') < entry.indexOf('pnpm install --frozen-lockfile'));
-  for (const command of ['pnpm check', 'pnpm build', 'pnpm test\n', 'pnpm exec playwright install chromium', 'pnpm test:e2e']) assert.ok(entry.includes(command), command);
+  for (const command of ['pnpm check', 'pnpm build', 'pnpm test\n', 'node /opt/company/check-browser-policy.mjs', 'pnpm test:e2e']) assert.ok(entry.includes(command), command);
+  assert.doesNotMatch(entry, /playwright install/);
+  assert.ok(entry.indexOf('node /opt/company/check-browser-policy.mjs') < entry.indexOf('pnpm test:e2e'));
   assert.doesNotMatch(entry, /--with-deps|\beval\b/);
   assert.match(image, /libasound2t64/);
   assert.match(image, /ca-certificates=20260816ubuntu0.24.04.1/);

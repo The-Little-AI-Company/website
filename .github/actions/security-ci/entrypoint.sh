@@ -49,7 +49,7 @@ case "${INPUT_MODE:-}" in
     test -z "$(find /github/runner_temp/work -mindepth 1 -maxdepth 1 -print -quit)"
     cp -a -- /source/. /github/runner_temp/work/
     cd -- /github/runner_temp/work
-    node --test scripts/check-node-version.test.mjs scripts/check-pnpm-version.test.mjs scripts/check-container-ci.test.mjs scripts/check-os-image-policy.test.mjs
+    node --test scripts/check-node-version.test.mjs scripts/check-pnpm-version.test.mjs scripts/check-container-ci.test.mjs scripts/check-os-image-policy.test.mjs scripts/check-browser-policy.test.mjs
     python3 -I -B scripts/validate-pnpm-archive.test.py
     python3 -I -B scripts/pack-regular.test.py
     python3 -I -B scripts/check-ci-mount.test.py
@@ -70,7 +70,7 @@ case "${INPUT_MODE:-}" in
     trusted_pnpm check
     trusted_pnpm build
     trusted_pnpm test
-    trusted_pnpm exec playwright install chromium
+    node /opt/company/check-browser-policy.mjs
     trusted_pnpm test:e2e
     ;;
   pack-pages|pack-report)
