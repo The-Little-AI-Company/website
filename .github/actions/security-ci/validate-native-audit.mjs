@@ -5,6 +5,8 @@ import {pathToFileURL} from 'node:url';
 
 export const LOCK_SHA256 = '54de17de0e3e513d91a57731af56c06f7627d4cb7fbe246dee32e0d2b94b92f5';
 export const PACKAGE_IDENTITIES = 403;
+// 404 reachable package contexts plus the native importer wrapper.
+export const AUDIT_TREE_ENTRIES = 405;
 const plain = value => value !== null && typeof value === 'object' && !Array.isArray(value)
   && [Object.prototype, null].includes(Object.getPrototypeOf(value));
 
@@ -63,7 +65,8 @@ function describeAuditCounts(metadata) {
     }
     return {kind: value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value};
   };
-  return {schema: 'company-native-audit-count-mismatch-v1', expectedPackageIdentities: PACKAGE_IDENTITIES,
+  return {schema: 'company-native-audit-tree-count-mismatch-v2', expectedPackageIdentities: PACKAGE_IDENTITIES,
+    expectedAuditTreeEntries: AUDIT_TREE_ENTRIES,
     totalDependencies: describe('totalDependencies'), dependencies: describe('dependencies'),
     devDependencies: describe('devDependencies'), optionalDependencies: describe('optionalDependencies')};
 }
@@ -83,13 +86,14 @@ export function validateAuditReport(text) {
       || Object.values(metadata.vulnerabilities).some(value => value !== 0)) {
     throw Error('All five native audit severity counts must be present and zero.');
   }
-  if (metadata.totalDependencies !== PACKAGE_IDENTITIES) throw Error('Native audit does not acknowledge the complete403-identity input. ' + JSON.stringify(describeAuditCounts(metadata)));
+  if (metadata.totalDependencies !== AUDIT_TREE_ENTRIES) throw Error('Native audit metadata does not match the expected405-entry audit tree. ' + JSON.stringify(describeAuditCounts(metadata)));
   for (const key of ['dependencies', 'devDependencies', 'optionalDependencies']) {
-    if (!Number.isSafeInteger(metadata[key]) || metadata[key] < 0 || metadata[key] > PACKAGE_IDENTITIES) {
+    if (!Number.isSafeInteger(metadata[key]) || metadata[key] < 0 || metadata[key] > AUDIT_TREE_ENTRIES) {
       throw Error('Invalid native audit dependency counts.');
     }
   }
   return {nativeAuditSchemaPassed: true, packageIdentities: PACKAGE_IDENTITIES,
+    auditTreeEntries: AUDIT_TREE_ENTRIES, wireCoverageProved: false,
     wireCoverageOrCurrentVendorAdvisoryClearanceProved: false};
 }
 

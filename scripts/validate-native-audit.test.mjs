@@ -2,11 +2,12 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {spawnSync} from 'node:child_process';
 import test from 'node:test';
-import {parseReport,validateAuditInput,validateAuditReport} from './validate-native-audit.mjs';
+import {parseReport,validateAuditInput,validateAuditReport,PACKAGE_IDENTITIES,AUDIT_TREE_ENTRIES} from './validate-native-audit.mjs';
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
+// Authored empty-finding fixture. Counts model the tree contract, not retained raw report bytes.
 const report = {actions: [], advisories: {}, muted: [], metadata: {
   vulnerabilities: {info: 0, low: 0, moderate: 0, high: 0, critical: 0},
-  dependencies: 100, devDependencies: 250, optionalDependencies: 53, totalDependencies: 403,
+  dependencies: 405, devDependencies: 0, optionalDependencies: 0, totalDependencies: 405,
 }};
 test('exact frozen403-identity lock and manager pin are required', () => {
   const lock = read('pnpm-lock.yaml'), manifest = JSON.parse(read('package.json'));
@@ -114,8 +115,8 @@ trusted_pnpm audit --json --audit-level=low
   }
 });
 
-test('count mismatch diagnostics stay bounded and nonsecret without weakening403', () => {
-  const prefix = 'Native audit does not acknowledge the complete403-identity input. ';
+test('count mismatch diagnostics stay bounded and nonsecret under the405-entry contract', () => {
+  const prefix = 'Native audit metadata does not match the expected405-entry audit tree. ';
   for (const value of [404, 0, '403', 'PRIVATE_MARKER\n::notice::injected', null, {PRIVATE_MARKER: true}, ['PRIVATE_MARKER'], 1000001]) {
     const copy = structuredClone(report);
     copy.metadata.totalDependencies = value;
@@ -129,6 +130,31 @@ test('count mismatch diagnostics stay bounded and nonsecret without weakening403
     assert.equal(rejected.message.includes('::notice::'), false);
     assert.equal(rejected.message.includes('\n'), false);
     assert.equal(JSON.parse(rejected.message.slice(prefix.length)).expectedPackageIdentities, 403);
+    assert.equal(JSON.parse(rejected.message.slice(prefix.length)).expectedAuditTreeEntries, 405);
   }
   assert.equal(validateAuditReport(JSON.stringify(report)).packageIdentities, 403);
+});
+
+test('audit count contract separates403 lock identities from405 tree entries', () => {
+  assert.equal(PACKAGE_IDENTITIES, 403);
+  assert.equal(AUDIT_TREE_ENTRIES, 405);
+  const accepted = validateAuditReport(JSON.stringify(report));
+  assert.equal(accepted.packageIdentities, 403);
+  assert.equal(accepted.auditTreeEntries, 405);
+  assert.equal(accepted.wireCoverageProved, false);
+  assert.equal(accepted.wireCoverageOrCurrentVendorAdvisoryClearanceProved, false);
+  for (const value of [403, 404, 406, '405', null, {}, []]) {
+    const copy = structuredClone(report);
+    copy.metadata.totalDependencies = value;
+    assert.throws(() => validateAuditReport(JSON.stringify(copy)));
+  }
+  for (const value of [406, '405', -1]) {
+    const copy = structuredClone(report);
+    copy.metadata.dependencies = value;
+    assert.throws(() => validateAuditReport(JSON.stringify(copy)));
+  }
+  const lock = read('pnpm-lock.yaml'), manifest = JSON.parse(read('package.json'));
+  assert.equal(validateAuditInput(lock, manifest).packageIdentities, 403);
+  assert.throws(() => validateAuditInput(lock + '\n', manifest));
+  assert.throws(() => validateAuditInput(lock, {...manifest, packageManager: 'pnpm@11.28.7'}));
 });
