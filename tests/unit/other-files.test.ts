@@ -216,6 +216,8 @@ describe('project files', () => {
     const configWith = async (ci: string): Promise<E2eConfig> => {
       vi.resetModules();
       vi.stubEnv('CI', ci);
+      // Hosted Actions also counts as CI, so a laptop run must clear it as well.
+      if (!ci) vi.stubEnv('GITHUB_ACTIONS', '');
       return ((await import('../../playwright.config')) as { default: E2eConfig }).default;
     };
     const scripts = (): Record<string, string> => (JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf-8')) as { scripts: Record<string, string> }).scripts;
