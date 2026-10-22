@@ -3,7 +3,8 @@ import { existsSync } from 'node:fs';
 import { defineConfig, devices } from '@playwright/test';
 
 const PORT = Number(process.env.E2E_PORT ?? 4400);
-const CI = Boolean(process.env.CI);
+// The CI container receives an allowlisted environment without CI, so hosted Actions counts too.
+const CI = Boolean(process.env.CI) || process.env.GITHUB_ACTIONS === 'true';
 // Hosted CI uses only the authenticated immutable Chrome Stable image installation.
 const managedBrowser = process.env.GITHUB_ACTIONS === 'true' || existsSync('/opt/company/browser-policy.json');
 if (managedBrowser) execFileSync('/opt/node/bin/node', ['/opt/company/check-browser-policy.mjs'], { stdio: 'inherit', timeout: 10000 });
@@ -21,6 +22,8 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: CI,
   retries: 0, // a flaky test is a bug in the test
+  // Stop well inside the 25-minute job so the report is written, packed and uploaded.
+  globalTimeout: CI ? 14 * 60_000 : 0,
   // CI keeps a report and a trace of every failure, which its workflow uploads. Locally the list is enough.
   reporter: CI ? [['list'], ['html', { open: 'never' }]] : 'list',
   outputDir: 'test-results',

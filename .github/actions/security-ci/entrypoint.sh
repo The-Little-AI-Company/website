@@ -49,7 +49,7 @@ case "${INPUT_MODE:-}" in
     test -z "$(find /github/runner_temp/work -mindepth 1 -maxdepth 1 -print -quit)"
     cp -a -- /source/. /github/runner_temp/work/
     cd -- /github/runner_temp/work
-    node --test scripts/check-node-version.test.mjs scripts/check-pnpm-version.test.mjs scripts/check-container-ci.test.mjs scripts/check-checkout-bootstrap.test.mjs scripts/check-os-image-policy.test.mjs scripts/check-browser-policy.test.mjs scripts/validate-native-audit.test.mjs
+    node --test scripts/check-node-version.test.mjs scripts/check-pnpm-version.test.mjs scripts/check-container-ci.test.mjs scripts/check-ci-timeouts.test.mjs scripts/check-checkout-bootstrap.test.mjs scripts/check-os-image-policy.test.mjs scripts/check-browser-policy.test.mjs scripts/validate-native-audit.test.mjs
     python3 -I -B scripts/validate-pnpm-archive.test.py
     python3 -I -B scripts/pack-regular.test.py
     python3 -I -B scripts/check-ci-mount.test.py
