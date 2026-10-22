@@ -44,7 +44,11 @@ case "$directory" in "$temporary"/company-security.????????) ;; *) exit 1;; esac
 test ! -L "$2"
 test "$(stat -c %u "$directory")" = "$uid"
 test "$(stat -c %a "$directory")" = 700
+# The verify container is named after its private directory, so cleanup can find it.
+container=${directory##*/}
 if test "$mode" = cleanup; then
+  # A cancelled verify step leaves its container running and writing into data/work.
+  docker rm --force "$container" >/dev/null 2>&1 || true
   rm -rf -- "$directory"
   exit
 fi
@@ -66,7 +70,7 @@ case "$mode" in
   verify)
     # Only these two mounts reach dependency/build/test code. No parent temp or commands/credentials.
     assert_private_mount "$directory/data" "$directory/data" "$uid"
-    docker "${common[@]}" --env INPUT_MODE=verify \
+    docker "${common[@]}" --name "$container" --env INPUT_MODE=verify \
       --env RUNNER_TEMP=/github/runner_temp --env GITHUB_WORKSPACE=/github/runner_temp/work \
       --mount "type=bind,src=$workspace,dst=/source,readonly" \
       --mount "type=bind,src=$directory/data,dst=/github/runner_temp" \

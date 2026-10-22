@@ -65,3 +65,12 @@ test('a systemic CI failure stops early instead of tracing every test', () => {
   const failures = Number(/maxFailures: CI \? (\d+) : 0,/.exec(playwright)?.[1]);
   assert.ok(failures > 0 && failures <= 25, `maxFailures in CI should be a small positive number, got ${failures}`);
 });
+
+test('cleanup stops a verify container that a cancelled step left running before it deletes files', () => {
+  const launcher = read('scripts/run-security-container.sh');
+  assert.match(launcher, /^container=\$\{directory##\*\/\}$/m);
+  assert.match(launcher, /docker "\$\{common\[@\]\}" --name "\$container" --env INPUT_MODE=verify/);
+  const cleanup = launcher.slice(launcher.indexOf('if test "$mode" = cleanup; then'));
+  assert.ok(cleanup.indexOf('docker rm --force "$container"') >= 0, 'cleanup must remove the named container');
+  assert.ok(cleanup.indexOf('docker rm --force "$container"') < cleanup.indexOf('rm -rf -- "$directory"'), 'the container must stop before its files go');
+});
