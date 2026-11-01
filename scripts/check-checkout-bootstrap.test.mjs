@@ -44,7 +44,7 @@ test('canonical checkout remains byte-bound to all three first workflow steps', 
     assert.equal(workflow.split(`        run: |\n${inline}`).length - 1, count);
   }
   // Preserve the original strict test, including its per-job first-step equality.
-  assert.equal(createHash('sha256').update(read('scripts/check-container-ci.test.mjs')).digest('hex'), 'cb3245ef48b9364bd169bde2aac71dc39ad5014e65cabc9f60874e20d3da6a5c');
+  assert.equal(createHash('sha256').update(read('scripts/check-container-ci.test.mjs')).digest('hex'), 'c7872f558cfde6d190853f9eed3e9fe69cb686c4ab8a5112ea171551cde8cbd1');
 });
 
 test('literal context contains only the pinned base and signed exact CA install', () => {

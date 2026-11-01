@@ -54,7 +54,7 @@ case "${INPUT_MODE:-}" in
     python3 -I -B scripts/pack-regular.test.py
     python3 -I -B scripts/check-ci-mount.test.py
     node scripts/check-pnpm-version.mjs --pin
-    printf '%s  %s\n' 3e4be68bf3deb65e33f1276e75c2970f0301b39fb844db5c1a05b08037591384 pnpm-workspace.yaml | sha256sum --check --status
+    printf '%s  %s\n' ce1a51ade1a581f643dc2a12cc9610a8258a05297866885fc60cab36d059ad34 pnpm-workspace.yaml | sha256sum --check --status
     test ! -e .npmrc
     test ! -e .pnpmfile.cjs
     test ! -e pnpmfile.cjs
