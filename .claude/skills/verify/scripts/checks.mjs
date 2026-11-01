@@ -74,7 +74,8 @@ function readLive() {
   for (const name of ['home', 'callout', 'vivary', 'about', 'contact', 'notfound', 'robots', 'sitemap']) {
     if (!pages[name]?.body) throw new Error(`page ${name} missing from the snapshot`);
   }
-  return { name: 'live', pages, age, sameOrigin: tsv('same-origin.tsv'), external: tsv('external.tsv'), css: readFileSync(join(liveDir, 'css.txt'), 'utf8') };
+  const site = /^site (\S+)/m.exec(readFileSync(join(liveDir, 'meta.txt'), 'utf8'))?.[1] ?? SITE;
+  return { name: 'live', site, pages, age, sameOrigin: tsv('same-origin.tsv'), external: tsv('external.tsv'), css: readFileSync(join(liveDir, 'css.txt'), 'utf8') };
 }
 
 // Elements that make the browser fetch something, and the attribute holding the URL. The same
@@ -96,6 +97,14 @@ function resolveRef(ref, base) {
   return u.origin === SITE ? u.pathname + u.search : u.href;
 }
 const isOwn = (u) => u.startsWith('/');
+const isManifest = (u) => /(\.webmanifest|\/manifest\.json)$/.test(u.split('?')[0]);
+// The icons a web app manifest names, resolved against the manifest's own URL. null when the
+// manifest is not JSON, which T5 reports as a broken asset.
+function manifestIcons(body, manifestPath) {
+  let icons;
+  try { icons = JSON.parse(body).icons ?? []; } catch { return null; }
+  return icons.map((i) => resolveRef(i.src, SITE + manifestPath)).filter(Boolean);
+}
 // URLs a page loads or links: every href, src, poster, data and srcset candidate, the og:image,
 // and url() in style attributes and <style> blocks. pagePath is where the page is served.
 function urlsOf(doc, pagePath) {
@@ -132,7 +141,7 @@ const NEVER_RENDERED = new Set(['SCRIPT', 'STYLE', 'TEMPLATE', 'NOSCRIPT', 'HEAD
 function isHidden(el) {
   if (!el.getAttribute) return false;
   if (NEVER_RENDERED.has(el.tagName) || el.getAttribute('hidden') !== undefined) return true;
-  return /(display\s*:\s*none|visibility\s*:\s*hidden)/i.test(el.getAttribute('style') ?? '');
+  return /(display\s*:\s*none|visibility\s*:\s*hidden|opacity\s*:\s*0*\.?0*\s*(;|!|$))/i.test(el.getAttribute('style') ?? '');
 }
 function visibleText(el) {
   if (!el) return '';
@@ -181,6 +190,11 @@ async function judge(side) {
       if (r) (isOwn(r) ? own : ext).add(r);
     }
     const bad = [];
+    for (const u of [...own]) if (isManifest(u)) {
+      const icons = manifestIcons((await side.get(u)).body, u);
+      if (!icons) bad.push(`manifest ${u} is not JSON`);
+      for (const i of icons ?? []) (isOwn(i) ? own : ext).add(i);
+    }
     for (const u of own) { const r = await side.get(u); if (r.status !== 200) bad.push(`${r.status} ${u}`); }
     report('T5', s, !bad.length, `${own.size} same-origin links and assets return 200`, bad);
     const fails = [];
@@ -195,6 +209,20 @@ async function judge(side) {
     report('T6', s, fails.length ? false : warns.length ? 'warn' : true, `${ext.size} external links, ${fails.length} 5xx, ${warns.length} other failures`, [...fails, ...warns]);
   } else {
     const bad = side.sameOrigin.filter(([c]) => c !== '200').map(([c, u]) => `${c} ${u}`);
+    // live.sh collects with grep. The parser decides what it had to collect: every same-origin URL
+    // in the pages and in their manifest needs a status in same-origin.tsv.
+    const siteOrigin = new URL(side.site).origin;
+    const collected = new Set(side.sameOrigin.map(([, u]) => { const x = new URL(u); return x.origin === siteOrigin ? x.pathname + x.search : u; }));
+    const expected = new Set();
+    for (const [n, path] of [...Object.entries(PATHS), ['notfound', '/does-not-exist/']]) for (const u of urlsOf(doc[n], path)) if (isOwn(u)) expected.add(u);
+    for (const u of [...expected]) if (isManifest(u)) {
+      const file = join(liveDir, 'files', u.split('?')[0]);
+      if (!existsSync(file)) { bad.push(`manifest ${u} not kept by live.sh`); continue; }
+      const icons = manifestIcons(readFileSync(file, 'utf8'), u);
+      if (!icons) bad.push(`manifest ${u} is not JSON`);
+      for (const i of icons ?? []) if (isOwn(i)) expected.add(i);
+    }
+    for (const u of expected) if (!collected.has(u)) bad.push(`not collected by live.sh: ${u}`);
     report('T5', s, side.sameOrigin.length > 0 && !bad.length, `${side.sameOrigin.length} same-origin links and assets return 200`, bad);
     const fails = side.external.filter(([c]) => /^5/.test(c)).map(([c, u]) => `${c} ${u}`);
     const warns = side.external.filter(([c]) => !/^[23]/.test(c) && !/^5/.test(c)).map(([c, u]) => `${c} ${u}`);

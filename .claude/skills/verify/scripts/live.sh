@@ -43,17 +43,19 @@ resolve() {
 }
 
 # refs FILE: the URL in every href, src, poster, data and srcset attribute (double-quoted,
-# single-quoted or bare), the og/twitter image, and every url() in an HTML file. The same set
-# checks.mjs collects from the local build.
+# single-quoted or bare), the og/twitter image, and every url() in an HTML file. Line breaks
+# become spaces first, so an attribute split across lines is read too. checks.mjs parses the
+# same pages and fails live T5 for any same-origin URL this grep missed.
 refs() {
-  local value="(\"[^\"]*\"|'[^']*'|[^[:space:]\"'>]+)"
+  local html value="(\"[^\"]*\"|'[^']*'|[^[:space:]\"'>]+)"
   local unquote="s/^[^=]*=[[:space:]]*//; s/^[\"']//; s/[\"']\$//"
-  { grep -oiE "[[:space:]](href|src|poster|data)[[:space:]]*=[[:space:]]*$value" "$1" | sed -E "$unquote"
-    grep -oiE "[[:space:]]srcset[[:space:]]*=[[:space:]]*$value" "$1" | sed -E "$unquote" |
+  html=$(tr '\r\n\t\f' '    ' < "$1")
+  { grep -oiE "[[:space:]/](href|src|poster|data)[[:space:]]*=[[:space:]]*$value" <<< "$html" | sed -E "$unquote"
+    grep -oiE "[[:space:]/]srcset[[:space:]]*=[[:space:]]*$value" <<< "$html" | sed -E "$unquote" |
       tr ',' '\n' | sed -E 's/^[[:space:]]+//; s/[[:space:]].*$//'
-    grep -oiE "<meta [^>]*(og:image|twitter:image)[\"'][^>]*>" "$1" |
-      grep -oiE "[[:space:]]content[[:space:]]*=[[:space:]]*$value" | sed -E "$unquote"
-    grep -oE 'url\([^)]*\)' "$1" | sed -E "s/^url\(['\"]?//; s/['\"]?\)$//"
+    grep -oiE "<meta [^>]*(og:image|twitter:image)[\"'][^>]*>" <<< "$html" |
+      grep -oiE "[[:space:]/]content[[:space:]]*=[[:space:]]*$value" | sed -E "$unquote"
+    grep -oE 'url\([^)]*\)' <<< "$html" | sed -E "s/^url\(['\"]?//; s/['\"]?\)$//"
   } | sed '/^$/d; s/&amp;/\&/g'
 }
 
@@ -76,10 +78,19 @@ done
 : > "$out/same-origin.tsv"
 : > "$out/external.tsv"
 : > "$out/css.txt"
-check_own() { # check_own URL: status of a same-origin URL. Stylesheets are kept and read too.
+check_own() { # check_own URL: status of a same-origin URL. Stylesheets and manifests are kept and read too.
   local url=$1 rel=${1#"$site"} file
   rel=${rel%%\?*}; [ -z "$rel" ] && rel=/
   case $rel in
+    *.webmanifest | */manifest.json)
+      file="$out/files$rel"; mkdir -p "$(dirname "$file")"
+      code=$(curl -sS -A "$ua" --max-time 30 -o "$file" -w '%{http_code}' "$url" 2>/dev/null || true)
+      printf '%s\t%s\n' "${code:-000}" "$url" >> "$out/same-origin.tsv"
+      tr '\r\n\t' '   ' < "$file" | grep -oE '"src"[[:space:]]*:[[:space:]]*"[^"]*"' |
+        sed -E 's/^"src"[[:space:]]*:[[:space:]]*"//; s/"$//; s#\\/#/#g' | sort -u |
+        while IFS= read -r ref; do
+          abs=$(resolve "$url" "$ref"); [ -n "$abs" ] && printf '%s\t%s\n' "$abs" "$rel" >> "$out/urls.tsv"
+        done ;;
     *.css)
       file="$out/files$rel"; mkdir -p "$(dirname "$file")"
       code=$(curl -sS -A "$ua" --max-time 30 -o "$file" -w '%{http_code}' "$url" 2>/dev/null || true)

@@ -139,8 +139,10 @@ $H/cleanup.sh /srv/website
   accessible name, `navigation "Main"`, and each link by its label from the key's Pages
   table. The header mark is `header a[href="/"]`. For T17 and T18 it requires the release
   text and link to be rendered and visible (`checkVisibility`, non-zero size).
-- `live.sh` collects every `href`, `src`, `srcset` candidate, `og:image`, `url()` in the
-  pages, and `url()` in each stylesheet, resolved against the page or stylesheet.
+- `live.sh` collects every `href`, `src`, `poster`, `data`, `srcset` candidate, `og:image`
+  and `url()` in the pages, `url()` in each stylesheet, and each icon `src` in the web app
+  manifest, resolved against the page, stylesheet or manifest. `checks.mjs` parses the
+  same pages and fails live T5 for any same-origin URL the collector missed.
 
 The feature map in `features/` says which rows prove which visitor feature.
 

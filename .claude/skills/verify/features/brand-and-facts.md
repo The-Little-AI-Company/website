@@ -24,10 +24,11 @@ Read the home page, `/vivary/` and `/about/`.
 ## Driving it with node-html-parser
 
 - `checks.mjs` reads visible text with whitespace collapsed. It skips subtrees with the
-  `hidden` attribute, inline `display:none` or `visibility:hidden`, and elements that never
-  render. `browser.mjs` repeats T17 and T18 on the rendered page, where a stylesheet can hide
-  content too: the text must be in `innerText` and the release link must pass
-  `checkVisibility` with a non-zero size. Both results must pass for the row to pass.
+  `hidden` attribute, inline `display:none`, `visibility:hidden` or `opacity:0`, and elements
+  that never render. `browser.mjs` repeats T17 and T18 on the rendered page, where a
+  stylesheet can hide content too: the element that holds the version text and the release
+  link must each pass `checkVisibility` (opacity included) with a non-zero size. Both
+  results must pass for the row to pass.
 - The home Vivary section is the element around `#feature-vivary` (the Vivary heading), up
   to its `article` or the child of `section#work`. If a branch removes that id, T18 fails
   and says so.

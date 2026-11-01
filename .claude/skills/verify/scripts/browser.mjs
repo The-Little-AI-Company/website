@@ -104,9 +104,13 @@ async function journeys(side, base) {
     const el = sel ? document.querySelector(sel)?.closest('article, section') : document.body;
     if (!el) return { text: false, link: false, found: false };
     const seen = (n) => n.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) && n.getBoundingClientRect().width > 0;
+    // The element that holds the version text must itself be visible, not only its section.
+    const holders = [];
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    for (let t = walker.nextNode(); t; t = walker.nextNode()) if (t.data.includes('v0.1.0-beta.1')) holders.push(t.parentElement);
     return {
       found: true,
-      text: seen(el) && el.innerText.includes('v0.1.0-beta.1'),
+      text: holders.some(seen),
       link: [...el.querySelectorAll('a[href]')].some((a) => a.getAttribute('href') === release && seen(a) && a.innerText.trim() !== ''),
     };
   }, [root, RELEASE]);

@@ -28,7 +28,11 @@ from every other. Mistyped URLs land on the 404 page.
   `srcset` candidate, `og:image`, and `url()` in style attributes, `<style>` blocks and the
   stylesheets. Each reference is resolved against its page or stylesheet first, so a
   relative `review-missing.png` on `/about/` is requested as `/about/review-missing.png`.
-- `live.sh` collects the same references the same way for production.
+- `live.sh` collects the same references for production with grep, after it turns line
+  breaks into spaces, plus the icons in the web app manifest. `checks.mjs` parses the live
+  pages and the kept manifest, and live T5 fails for any same-origin URL that
+  `same-origin.tsv` lacks, so a reference the grep misses fails instead of passing.
+  The build side adds the manifest icons to T5 too.
 
 ## Gotchas
 
