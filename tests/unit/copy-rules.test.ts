@@ -67,7 +67,7 @@ describe.each(PAGE_CASES)('copy rules on %s', (_label, info) => {
     expect(offenders).toEqual([]);
   });
 
-  it('dates only the days the site has a reason to name (Sept 22, Oct 3 and Oct 8, 2026)', () => {
+  it('dates only the days the site has a reason to name (Oct 3, Oct 8 and Nov 1, 2026)', () => {
     const found = snippets(info).flatMap((s) => dates(s.text));
     const unknown = found.filter((d) => !(KNOWN_DATES as readonly string[]).includes(d));
     expect(unknown, 'a date that is not in KNOWN_DATES would be invented').toEqual([]);

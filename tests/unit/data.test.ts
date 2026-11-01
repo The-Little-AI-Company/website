@@ -61,11 +61,11 @@ describe('tools.ts', () => {
   describe('Vivary points at its own site and the renamed repository', () => {
     const v = TOOLS_EXPECTED.vivary;
 
-    it('has the unsigned Windows preview status', () => {
+    it('has the beta.1 status', () => {
       expect(vivary.status).toBe(v.status);
     });
 
-    it('has Visit vivaryagent.xyz as its primary link', () => {
+    it('has the beta.1 download as its primary link', () => {
       expect(vivary.primary).toEqual(v.primary);
     });
 
@@ -81,9 +81,14 @@ describe('tools.ts', () => {
       expect('version' in vivary).toBe(false);
     });
 
-    it('writes the day of its preview once: the status is built from it, and no page or component types it again', () => {
-      expect(vivary.status).toBe(`Unsigned Windows preview · ${vivary.previewDate}`);
-      const typedAgain = listFiles(SRC).filter((file) => file !== 'data/tools.ts' && readFileSync(join(SRC, file), 'utf-8').includes(vivary.previewDate));
+    it('writes its prerelease once: the status and primary link are built from it, and no page or component types the date or URL again', () => {
+      expect(vivary.prerelease).toEqual(v.prerelease);
+      expect(vivary.status).toBe(`Beta · ${vivary.prerelease.tag} · ${vivary.prerelease.date}`);
+      expect(vivary.primary.href).toBe(vivary.prerelease.href);
+      const typedAgain = listFiles(SRC).filter((file) => {
+        const text = readFileSync(join(SRC, file), 'utf-8');
+        return file !== 'data/tools.ts' && (text.includes(vivary.prerelease.date) || text.includes(vivary.prerelease.href));
+      });
       expect(typedAgain.map((file) => `src/${file}`)).toEqual([]);
     });
   });

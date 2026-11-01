@@ -140,8 +140,8 @@ describe('home: #work', () => {
       expect(attr(img, 'src'), 'the src is the fallback, the full file').toBe(v.plate.src);
     });
 
-    it('keeps "sign-in" on one line in the caption', () => {
-      expect(textOf(one(one(feature(), 'figcaption'), '.nowrap'))).toBe('sign-in');
+    it('keeps "beta.1" on one line in the caption', () => {
+      expect(textOf(one(one(feature(), 'figcaption'), '.nowrap'))).toBe('beta.1');
     });
 
     it('is an article named by its title, though the plate comes first in the markup', () => {
@@ -153,6 +153,10 @@ describe('home: #work', () => {
 
     it('has the body paragraph', () => {
       expect(textOf(paragraph(feature(), v.body))).toBe(v.body);
+    });
+
+    it('links the beta.1 release notes from the body paragraph', () => {
+      expect(links(paragraph(feature(), v.body))).toEqual([{ label: v.bodyLink.label, href: v.bodyLink.href }]);
     });
 
     it('has the wip badge with its date', () => {

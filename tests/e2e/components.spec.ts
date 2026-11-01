@@ -111,14 +111,14 @@ for (const scheme of SCHEMES) {
         test('the middle dot in a badge is a separator with a margin of .15em on each side of the spaces the text has, which sets the dot .35em from each word', async ({ page }) => {
           await open(page, '/');
           const badge = page.locator('section#work .status--wip');
-          const sep = await style(badge.locator('.sep'), ['margin-left', 'margin-right', 'font-size', 'white-space']);
+          const sep = await style(badge.locator('.sep').first(), ['margin-left', 'margin-right', 'font-size', 'white-space']);
           const em = parseFloat(sep['font-size'] ?? '0');
           expect(parseFloat(sep['margin-left'] ?? '0')).toBeCloseTo(0.15 * em, 1);
           expect(parseFloat(sep['margin-right'] ?? '0')).toBeCloseTo(0.15 * em, 1);
           expect(sep['white-space'], 'a line never starts with the dot').toBe('nowrap');
-          expect(await badge.textContent(), 'the text has an ordinary space on each side of the dot').toContain('preview · Sept');
+          expect(await badge.textContent(), 'the text has an ordinary space on each side of the dot').toContain('Beta · v0.1.0-beta.1 · Nov');
           // Where the ink is: from the last letter before the dot to the dot, and from the dot to the first letter after it.
-          const gaps = await badge.locator('.sep').evaluate((el) => {
+          const gaps = await badge.locator('.sep').first().evaluate((el) => {
             const [before, after] = [el.previousSibling, el.nextSibling];
             const dotNode = el.firstChild;
             if (!(before instanceof Text) || !(after instanceof Text) || !(dotNode instanceof Text)) throw new Error('the dot is not set between two pieces of text');

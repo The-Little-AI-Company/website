@@ -515,8 +515,8 @@ describe('copy rules', () => {
   });
 
   it('finds retired names, case-sensitively', () => {
-    expect(retiredNames('Wazoo and beta and Beta and Two tools')).toEqual(['Wazoo', 'beta', 'Beta', 'Two tools']);
-    expect(retiredNames('BETA wazoo two tools')).toEqual([]);
+    expect(retiredNames('Wazoo and Hoolio and hoolio and Two tools')).toEqual(['Wazoo', 'Hoolio', 'Two tools']);
+    expect(retiredNames('HOOLIO wazoo two tools')).toEqual([]);
   });
 
   it('counts em dashes, semicolons and exclamation marks', () => {
