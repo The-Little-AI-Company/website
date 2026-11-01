@@ -42,13 +42,19 @@ resolve() {
   echo "$origin/$joined$query"
 }
 
-# refs FILE: every href, src, srcset candidate and og/twitter image in an HTML file.
+# refs FILE: the URL in every href, src, poster, data and srcset attribute (double-quoted,
+# single-quoted or bare), the og/twitter image, and every url() in an HTML file. The same set
+# checks.mjs collects from the local build.
 refs() {
-  { grep -oE '(href|src)="[^"]*"' "$1" | sed -E 's/^[a-z]+="//; s/"$//'
-    grep -oE 'srcset="[^"]*"' "$1" | sed -E 's/^srcset="//; s/"$//' | tr ',' '\n' | sed -E 's/^ +//; s/ .*$//'
-    grep -oE '<meta [^>]*(og:image|twitter:image)"[^>]*>' "$1" | grep -oE 'content="[^"]*"' | sed -E 's/^content="//; s/"$//'
+  local value="(\"[^\"]*\"|'[^']*'|[^[:space:]\"'>]+)"
+  local unquote="s/^[^=]*=[[:space:]]*//; s/^[\"']//; s/[\"']\$//"
+  { grep -oiE "[[:space:]](href|src|poster|data)[[:space:]]*=[[:space:]]*$value" "$1" | sed -E "$unquote"
+    grep -oiE "[[:space:]]srcset[[:space:]]*=[[:space:]]*$value" "$1" | sed -E "$unquote" |
+      tr ',' '\n' | sed -E 's/^[[:space:]]+//; s/[[:space:]].*$//'
+    grep -oiE "<meta [^>]*(og:image|twitter:image)[\"'][^>]*>" "$1" |
+      grep -oiE "[[:space:]]content[[:space:]]*=[[:space:]]*$value" | sed -E "$unquote"
     grep -oE 'url\([^)]*\)' "$1" | sed -E "s/^url\(['\"]?//; s/['\"]?\)$//"
-  } | sed 's/&amp;/\&/g'
+  } | sed '/^$/d; s/&amp;/\&/g'
 }
 
 status=done
