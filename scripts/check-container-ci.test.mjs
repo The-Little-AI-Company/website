@@ -109,7 +109,7 @@ test('Node and official GitHub program digests remain immutable', () => {
 });
 
 test('scoped manager inputs, full audit and all site tests remain required', () => {
-  assert.equal(createHash('sha256').update(read('pnpm-workspace.yaml')).digest('hex'), '3e4be68bf3deb65e33f1276e75c2970f0301b39fb844db5c1a05b08037591384');
+  assert.equal(createHash('sha256').update(read('pnpm-workspace.yaml')).digest('hex'), 'ce1a51ade1a581f643dc2a12cc9610a8258a05297866885fc60cab36d059ad34');
   assert.match(entry, /test ! -e \.npmrc/);
   assert.match(entry, /npm_config_ignore_pnpmfile=true/);
   assert.ok(entry.indexOf('pnpm audit --json --audit-level=low') < entry.indexOf('pnpm install --frozen-lockfile'));

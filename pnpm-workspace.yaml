@@ -8,7 +8,7 @@ allowBuilds:
 overrides:
   yaml: '^2.8.3'
   # Security updates stay on each existing dependency's release line.
-  'fast-uri@>=3.0.0 <3.1.8': '3.1.8'
+  'fast-uri@>=3.0.0 <3.1.9': '3.1.9'
   'nanoid@>=3.0.0 <3.3.18': '3.3.18'
   'postcss@>=8.0.0 <8.5.23': '8.5.23'
   'svgo@>=4.0.0 <4.1.0': '4.1.0'
