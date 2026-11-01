@@ -48,6 +48,15 @@ async function buildSide() {
 }
 
 function liveSide() {
+  try {
+    return readLive();
+  } catch (e) {
+    console.log(`FAIL    LIVE  live snapshot unreadable: ${e.message.split('\n')[0]}`);
+    return null;
+  }
+}
+
+function readLive() {
   if (!existsSync(join(liveDir, 'pages.tsv'))) return null;
   const age = Date.now() / 1000 - Number(/epoch (\d+)/.exec(readFileSync(join(liveDir, 'meta.txt'), 'utf8'))[1]);
   const pages = {};
@@ -62,23 +71,75 @@ function liveSide() {
     pages[name] = { status: Number(status), headers, body: existsSync(file) ? readFileSync(file, 'utf8') : '' };
   }
   const tsv = (f) => readFileSync(join(liveDir, f), 'utf8').trim().split('\n').filter(Boolean).map((l) => l.split('\t'));
+  for (const name of ['home', 'callout', 'vivary', 'about', 'contact', 'notfound', 'robots', 'sitemap']) {
+    if (!pages[name]?.body) throw new Error(`page ${name} missing from the snapshot`);
+  }
   return { name: 'live', pages, age, sameOrigin: tsv('same-origin.tsv'), external: tsv('external.tsv'), css: readFileSync(join(liveDir, 'css.txt'), 'utf8') };
 }
 
-// URLs a page loads or links, as written in the HTML.
-function urlsOf(doc) {
-  const out = new Set();
-  for (const el of doc.querySelectorAll('[href],[src],[srcset],meta[content]')) {
-    for (const a of ['href', 'src', 'content']) {
-      const v = el.getAttribute(a);
-      if (v && (/^https?:\/\//.test(v) || v.startsWith('/'))) out.add(v);
-    }
-    const s = el.getAttribute('srcset');
-    if (s) for (const part of s.split(',')) out.add(part.trim().split(/\s+/)[0]);
-  }
-  return [...out];
+// Elements that make the browser fetch something, and the attribute holding the URL. The same
+// list as tests/unit/third-party.test.ts, so live production is held to the build's rule.
+const LOADERS = [
+  ['script[src]', 'src'], ['link[href]', 'href'], ['img[src]', 'src'], ['source[src]', 'src'], ['iframe[src]', 'src'],
+  ['video[src]', 'src'], ['video[poster]', 'poster'], ['audio[src]', 'src'], ['embed[src]', 'src'], ['object[data]', 'data'],
+  ['track[src]', 'src'], ['meta[property="og:image"]', 'content'],
+];
+const NOT_FETCHED = /^(mailto:|tel:|data:|javascript:|#)/i;
+// Every URL in a string of CSS.
+const cssUrls = (css) => [...css.matchAll(/url\(\s*["']?([^)"']+)["']?\s*\)/g)].map((m) => m[1].trim());
+// Resolves a reference the way a browser does, against the page or stylesheet that holds it.
+// Same-origin URLs come back as a path, others as an absolute URL. null for a URL nothing fetches.
+function resolveRef(ref, base) {
+  if (!ref || NOT_FETCHED.test(ref.trim())) return null;
+  const u = new URL(ref.trim(), base);
+  u.hash = '';
+  return u.origin === SITE ? u.pathname + u.search : u.href;
 }
-const isOwn = (u) => u.startsWith('/') && !u.startsWith('//') || u === SITE || u.startsWith(`${SITE}/`);
+const isOwn = (u) => u.startsWith('/');
+// URLs a page loads or links: every href, src, poster, data and srcset candidate, the og:image,
+// and url() in style attributes and <style> blocks. pagePath is where the page is served.
+function urlsOf(doc, pagePath) {
+  const base = SITE + pagePath;
+  const refs = [];
+  for (const el of doc.querySelectorAll('[href],[src],[poster],object[data]')) {
+    for (const a of ['href', 'src', 'poster', 'data']) if (el.getAttribute(a)) refs.push(el.getAttribute(a));
+  }
+  for (const el of doc.querySelectorAll('[srcset]')) for (const part of el.getAttribute('srcset').split(',')) refs.push(part.trim().split(/\s+/)[0]);
+  for (const el of doc.querySelectorAll('meta[property="og:image"],meta[name="twitter:image"]')) refs.push(el.getAttribute('content'));
+  for (const el of doc.querySelectorAll('[style]')) refs.push(...cssUrls(el.getAttribute('style')));
+  for (const el of doc.querySelectorAll('style')) refs.push(...cssUrls(el.text));
+  return [...new Set(refs.map((r) => resolveRef(r, base)).filter(Boolean))];
+}
+// Resources a page makes the browser load from another origin. Links a visitor may click are not
+// loads, so plain anchors are not in this list.
+function foreignLoads(doc, pagePath) {
+  const base = SITE + pagePath;
+  const out = [];
+  const check = (ref, where) => { const u = resolveRef(ref, base); if (u && !isOwn(u)) out.push(`${where} -> ${u}`); };
+  for (const [selector, attribute] of LOADERS) for (const el of doc.querySelectorAll(selector)) check(el.getAttribute(attribute), `<${el.rawTagName} ${attribute}>`);
+  for (const el of doc.querySelectorAll('img[srcset],source[srcset]')) for (const part of el.getAttribute('srcset').split(',')) check(part.trim().split(/\s+/)[0], `<${el.rawTagName} srcset>`);
+  for (const el of doc.querySelectorAll('[style]')) for (const u of cssUrls(el.getAttribute('style'))) check(u, 'style attribute url()');
+  for (const el of doc.querySelectorAll('style')) {
+    if (/@import/i.test(el.text)) out.push('<style> @import');
+    for (const u of cssUrls(el.text)) check(u, '<style> url()');
+  }
+  return out;
+}
+
+// Text a visitor can see without CSS: skips hidden subtrees, inline display:none or
+// visibility:hidden, and elements that never render. browser.mjs checks the rendered page too.
+const NEVER_RENDERED = new Set(['SCRIPT', 'STYLE', 'TEMPLATE', 'NOSCRIPT', 'HEAD']);
+function isHidden(el) {
+  if (!el.getAttribute) return false;
+  if (NEVER_RENDERED.has(el.tagName) || el.getAttribute('hidden') !== undefined) return true;
+  return /(display\s*:\s*none|visibility\s*:\s*hidden)/i.test(el.getAttribute('style') ?? '');
+}
+function visibleText(el) {
+  if (!el) return '';
+  const walk = (n) => (n.nodeType === 3 ? n.rawText : isHidden(n) ? ' ' : n.childNodes.map(walk).join(''));
+  return walk(el).replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+}
+const shown = (el, root) => { for (let n = el; n && n !== root; n = n.parentNode) if (isHidden(n)) return false; return true; };
 
 // ---------- rows ----------
 async function judge(side) {
@@ -111,15 +172,16 @@ async function judge(side) {
     const own = new Set();
     const ext = new Set();
     const css = [];
-    for (const n of [...Object.keys(PATHS), 'notfound']) {
-      for (const u of urlsOf(doc[n])) (isOwn(u) ? own : ext).add(u.startsWith(SITE) ? u.slice(SITE.length) || '/' : u);
+    for (const [n, path] of [...Object.entries(PATHS), ['notfound', '/does-not-exist/']]) {
+      for (const u of urlsOf(doc[n], path)) (isOwn(u) ? own : ext).add(u);
     }
-    for (const u of [...own]) if (u.endsWith('.css')) css.push([u, (await side.get(u)).body]);
-    for (const [u, body] of css) for (const m of body.matchAll(/url\(\s*["']?([^)"']+)["']?\s*\)/g)) {
-      if (!m[1].startsWith('data:')) own.add(new URL(m[1], `http://x${u}`).pathname);
+    for (const u of [...own]) if (u.split('?')[0].endsWith('.css')) css.push([u, (await side.get(u)).body]);
+    for (const [u, body] of css) for (const ref of cssUrls(body)) {
+      const r = resolveRef(ref, SITE + u);
+      if (r) (isOwn(r) ? own : ext).add(r);
     }
     const bad = [];
-    for (const u of own) { const r = await side.get(u.split('#')[0]); if (r.status !== 200) bad.push(`${r.status} ${u}`); }
+    for (const u of own) { const r = await side.get(u); if (r.status !== 200) bad.push(`${r.status} ${u}`); }
     report('T5', s, !bad.length, `${own.size} same-origin links and assets return 200`, bad);
     const fails = [];
     const warns = [];
@@ -149,16 +211,24 @@ async function judge(side) {
     for (const n of htmlPages) if (/document\.cookie|localStorage|sessionStorage|navigator\.sendBeacon/.test(p[n].body)) bad.push(`${n} storage API`);
     report('T8', s, !bad.length, 'no cookie header and no storage API', bad);
   }
-  // T9, the html part (browser.mjs has the browser part): no hints, no foreign CSS.
+  // T9, the html part (browser.mjs has the browser part on both sides): no resource from
+  // another origin in any loader, no connection hint, nothing foreign in any stylesheet.
   {
     const bad = [];
-    for (const n of htmlPages) for (const l of doc[n].querySelectorAll('link[rel]')) {
-      if (/\b(preconnect|dns-prefetch|prefetch|prerender)\b/.test(l.getAttribute('rel'))) bad.push(`${n} ${l.toString()}`);
+    const pathOf = (n) => PATHS[n] ?? '/does-not-exist/';
+    for (const n of htmlPages) {
+      for (const f of foreignLoads(doc[n], pathOf(n))) bad.push(`${n} ${f}`);
+      for (const l of doc[n].querySelectorAll('link[rel]')) {
+        if (/\b(preconnect|dns-prefetch|prefetch|prerender)\b/.test(l.getAttribute('rel'))) bad.push(`${n} ${l.toString()}`);
+      }
     }
-    const cssText = s === 'live' ? side.css : (await Promise.all(urlsOf(doc.home).filter((u) => u.endsWith('.css')).map(async (u) => (await side.get(u)).body))).join('\n');
+    const sheets = new Set(htmlPages.flatMap((n) => doc[n].querySelectorAll('link[rel~="stylesheet"][href]')
+      .map((l) => resolveRef(l.getAttribute('href'), SITE + pathOf(n))).filter((u) => u && isOwn(u))));
+    const cssText = s === 'live' ? side.css : (await Promise.all([...sheets].map(async (u) => (await side.get(u)).body))).join('\n');
+    if (!sheets.size || !cssText.trim()) bad.push('no stylesheet text to check');
     if (/@import/i.test(cssText)) bad.push('CSS @import');
-    for (const m of cssText.matchAll(/url\(\s*["']?([^)"']+)["']?\s*\)/g)) if (/^(https?:)?\/\//.test(m[1]) && !m[1].startsWith(SITE)) bad.push(`CSS url ${m[1]}`);
-    report('T9', s, !bad.length, 'no connection hints and no foreign CSS (html part)', bad);
+    for (const u of cssUrls(cssText)) if (/^(https?:)?\/\//i.test(u) && !resolveRef(u, SITE + '/').startsWith('/')) bad.push(`CSS url ${u}`);
+    report('T9', s, !bad.length, 'no third-party loader, connection hint or foreign CSS (html part)', bad);
   }
   // T11: footer sentence on every page.
   {
@@ -178,9 +248,10 @@ async function judge(side) {
     const r = p.sitemap;
     const bad = [];
     if (r.status !== 200) bad.push(`status ${r.status}`);
-    // The content type comes from the server, not the build. astro preview sends text/xml and
-    // GitHub Pages sends application/xml, so only the live side can check the key's type.
-    if (s === 'live' && !/^application\/xml/.test(r.headers['content-type'] ?? '')) bad.push(`content-type ${r.headers['content-type']}`);
+    // The content type comes from the server. GitHub Pages must send the key's application/xml.
+    // astro preview sends text/xml, so the build side accepts either XML type and nothing else.
+    const type = r.headers['content-type'] ?? '';
+    if (s === 'live' ? !/^application\/xml/.test(type) : !/^(application|text)\/xml/.test(type)) bad.push(`content-type ${type}`);
     const locs = [...r.body.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]).sort();
     const want = key.pages.map((pg) => SITE + pg.path).sort();
     if (JSON.stringify(locs) !== JSON.stringify(want)) bad.push(`locs ${locs.join(' ')}`);
@@ -213,10 +284,11 @@ async function judge(side) {
     report('T16', s, !bad.length, 'no owl or Hoolio in text, attributes or public file names', bad);
   }
   // T17 to T22: Holiday Sprint 1 targets.
-  const hasRelease = (el) => el?.querySelectorAll('a[href]').some((a) => a.getAttribute('href') === RELEASE);
+  // Only text and links a visitor can see count. browser.mjs repeats both checks on the rendered page.
+  const hasRelease = (el) => el?.querySelectorAll('a[href]').some((a) => a.getAttribute('href') === RELEASE && shown(a, el) && visibleText(a));
   {
     const bad = [];
-    if (!text(doc.vivary.querySelector('body')).includes('v0.1.0-beta.1')) bad.push('no "v0.1.0-beta.1" text');
+    if (!visibleText(doc.vivary.querySelector('body')).includes('v0.1.0-beta.1')) bad.push('no visible "v0.1.0-beta.1" text');
     if (!hasRelease(doc.vivary)) bad.push(`no link to ${RELEASE}`);
     report('T17', s, !bad.length, '/vivary/ shows beta.1 and links its release', bad);
   }
@@ -227,17 +299,22 @@ async function judge(side) {
     const bad = [];
     if (!sec) bad.push('no Vivary section (#feature-vivary) on the home page');
     else {
-      if (!text(sec).includes('v0.1.0-beta.1')) bad.push('no "v0.1.0-beta.1" text in the Vivary section');
+      if (!shown(sec, doc.home) || !visibleText(sec).includes('v0.1.0-beta.1')) bad.push('no visible "v0.1.0-beta.1" text in the Vivary section');
       if (!hasRelease(sec)) bad.push(`no link to ${RELEASE} in the Vivary section`);
     }
     report('T18', s, !bad.length, 'home Vivary section shows beta.1 and links its release', bad);
   }
+  // T19, as the key words it: no "Windows preview came out" and no "In development" anywhere on the
+  // two pages, and Sept 22, 2026 not given as the latest release, which is what the status badges
+  // and the now line state. A history line that names the date may stay.
   {
     const bad = [];
-    for (const n of ['home', 'vivary']) for (const t of ['Windows preview came out', 'Sept 22, 2026', 'In development']) {
-      if (text(doc[n].querySelector('body')).toLowerCase().includes(t.toLowerCase())) bad.push(`${n} has "${t}"`);
+    for (const n of ['home', 'vivary']) {
+      const body = visibleText(doc[n].querySelector('body')).toLowerCase();
+      for (const t of ['Windows preview came out', 'In development']) if (body.includes(t.toLowerCase())) bad.push(`${n} has "${t}"`);
+      for (const el of doc[n].querySelectorAll('.status, .now')) if (/sept\.? 22,? 2026/i.test(visibleText(el))) bad.push(`${n} states Sept 22, 2026 as current: "${visibleText(el)}"`);
     }
-    report('T19', s, !bad.length, 'no stale preview date or "In development"', bad);
+    report('T19', s, !bad.length, 'no preview sentence, no "In development", Sept 22 not the latest release', bad);
   }
   {
     const bad = doc.vivary.querySelectorAll('a[href]').map((a) => a.getAttribute('href')).filter((h) => /npmjs\.com|pypi\.org/i.test(h));

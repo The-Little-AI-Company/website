@@ -21,9 +21,10 @@ A crawler requests `/robots.txt`, follows it to `/sitemap.xml`, and finds the fi
 
 ## Gotchas
 
-- `sitemap.xml` content type: GitHub Pages sends `application/xml`, which the key requires.
-  astro preview sends `text/xml`, so only the live side checks the type. The build side
-  checks status and contents.
+- `sitemap.xml` content type: GitHub Pages sends `application/xml`, which the key requires,
+  and the live side checks exactly that. astro preview sends `text/xml`, so the build side
+  accepts `text/xml` or `application/xml` and fails anything else. The build side does not
+  prove the key's literal type, only that the file is served as XML.
 - T14 fails whenever a new advisory reaches the locked dependencies, because `pnpm audit`
   runs at `--audit-level=low` inside the build. That happened on 2026-11-01 (fast-uri,
   fixed by PR #69). Read `pnpm-verify.log` before suspecting the branch.

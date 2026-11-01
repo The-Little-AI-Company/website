@@ -3,6 +3,9 @@ SKILL="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO="$(cd "${1:-$SKILL/../../..}" && pwd)"
 VERIFY_PORT="${VERIFY_PORT:-4420}"
 BUILD_URL="http://127.0.0.1:$VERIFY_PORT"
+# replay.mjs serves the live snapshot here, so the browser journeys run on production's pages too.
+REPLAY_PORT=$((VERIFY_PORT + 1))
+REPLAY_URL="http://127.0.0.1:$REPLAY_PORT"
 # The repo's container layout. entrypoint.sh hard-codes these paths.
 WORK=/github/runner_temp/work
 STATE=/run/tlac-verify
@@ -26,4 +29,4 @@ port_owner() {
   done
   echo unknown
 }
-export SKILL REPO VERIFY_PORT BUILD_URL WORK STATE EVIDENCE_ROOT NODE BUILDER
+export SKILL REPO VERIFY_PORT BUILD_URL REPLAY_PORT REPLAY_URL WORK STATE EVIDENCE_ROOT NODE BUILDER

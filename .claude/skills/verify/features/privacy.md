@@ -20,13 +20,19 @@ Load any page. Nothing outside littleaicompany.com is contacted, and the footer 
 ## Driving it with Playwright and fetch
 
 - `browser.mjs` records every request while it loads each page with `waitUntil: networkidle`,
-  and fails on any URL outside the preview origin. A page that records no request at all
-  also fails, so a broken recorder cannot pass.
-- `checks.mjs` reads response headers and HTML on both sides for T7, T8, T9 and T11.
+  and fails on any URL outside the page's own origin. It does this on the build preview and
+  on the live replay. A page that records no request at all also fails, so a broken
+  recorder cannot pass.
+- `checks.mjs` reads response headers and HTML on both sides for T7, T8, T9 and T11. Its T9
+  part fails any resource from another origin in the loaders `tests/unit/third-party.test.ts`
+  lists, in `srcset`, in style attributes, in `<style>` blocks and in the stylesheets. Plain
+  anchors are links a visitor clicks, not loads, so they belong to T6.
 - `run-all.sh` compares the third-party test file with `origin/dev` and requires its name in
   the vitest output of a passing T14.
 
 ## Gotchas
 
-- T9's browser part runs on the build side only. Live gets the HTML and CSS part.
+- The live replay serves production's pages and stylesheets only. Fonts and images answer 404
+  there. T9 reads which origins Chrome asked for, not whether they answered, and T5 checks
+  production's statuses from the snapshot.
 - Never edit `tests/unit/third-party.test.ts` to make a branch pass. T10 fails on any byte.

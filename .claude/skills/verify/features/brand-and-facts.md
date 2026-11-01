@@ -11,7 +11,8 @@ facts PR merges and deploys.
   name under `public/` (T16).
 - `/vivary/` and the home Vivary section show `v0.1.0-beta.1` and link
   `https://github.com/vivary-dev/vivary/releases/tag/v0.1.0-beta.1` (T17, T18).
-- No "Windows preview came out", "Sept 22, 2026" or "In development" on `/` or `/vivary/` (T19).
+- No "Windows preview came out" and no "In development" on `/` or `/vivary/`, and no status
+  badge or now line that gives Sept 22, 2026 as the latest release (T19).
 - `/vivary/` links neither npmjs.com nor pypi.org (T20).
 - `/about/` does not say "Zo" (whole word) or "zocomputer" (T21).
 - The home `<main>` text is in company voice (T22).
@@ -22,7 +23,11 @@ Read the home page, `/vivary/` and `/about/`.
 
 ## Driving it with node-html-parser
 
-- `checks.mjs` reads visible text with whitespace collapsed.
+- `checks.mjs` reads visible text with whitespace collapsed. It skips subtrees with the
+  `hidden` attribute, inline `display:none` or `visibility:hidden`, and elements that never
+  render. `browser.mjs` repeats T17 and T18 on the rendered page, where a stylesheet can hide
+  content too: the text must be in `innerText` and the release link must pass
+  `checkVisibility` with a non-zero size. Both results must pass for the row to pass.
 - The home Vivary section is the element around `#feature-vivary` (the Vivary heading), up
   to its `article` or the child of `section#work`. If a branch removes that id, T18 fails
   and says so.
@@ -34,6 +39,6 @@ Read the home page, `/vivary/` and `/about/`.
 
 - T15 needs the live snapshot. Sprint 3 (the holiday mark) changes the mark, so T15 needs a
   key PR before that branch can pass.
-- T19 forbids "Sept 22, 2026" anywhere on the two pages, which is stricter than the key's
-  "as the latest release". A history line that names that date fails, so word it without the
-  full date or change the key first.
+- T19 reads "as the latest release" as the status badges (`.status`) and the now line
+  (`.now`), which are where the site states its current release. A history line elsewhere
+  may name Sept 22, 2026.

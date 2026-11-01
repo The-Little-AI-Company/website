@@ -78,22 +78,21 @@ run() {
   echo "$build_id" > "$WORK/.verify-build"
   if ! "$HERE/launch.sh" "$EVIDENCE/preview.log" "$REPO" || ! "$HERE/doctor.sh" "$REPO"; then echo "VERIFY_RESULT=fail"; return 1; fi
 
-  as_builder "$NODE" "$HERE/checks.mjs" "$EVIDENCE/key.json" "$BUILD_URL" "$WORK/dist" "$REPO/public" "$EVIDENCE/live" "$WORK" "$EVIDENCE" || status=1
-  as_builder "$NODE" "$HERE/browser.mjs" "$EVIDENCE/key.json" "$BUILD_URL" "$WORK" "$EVIDENCE" || status=1
+  # Production's own pages, replayed from the snapshot, so the browser journeys run on both sides.
+  if ! "$HERE/replay.sh" "$EVIDENCE/live" "$EVIDENCE/replay.log"; then echo "VERIFY_RESULT=fail the live replay did not start"; return 1; fi
 
-  # Every key row has a check, and every check has a key row.
-  local covered missing
-  covered=$( { cut -d' ' -f1 "$EVIDENCE/repo.txt"
-    "$NODE" -e 'for (const f of process.argv.slice(1)) try { for (const r of require(f).results) console.log(r.id) } catch {}' "$EVIDENCE/checks.json" "$EVIDENCE/browser.json"
-  } | sort -u)
-  missing=$("$NODE" -e 'console.log(require(process.argv[1]).rows.map(r => r.id).join("\n"))' "$EVIDENCE/key.json" | sort -u | comm -23 - <(echo "$covered"))
-  if [ -n "$missing" ]; then echo "FAIL    COVER key rows with no result: $(echo $missing)"; status=1
-  else echo "PASS    COVER every key row produced a result"; fi
+  as_builder "$NODE" "$HERE/checks.mjs" "$EVIDENCE/key.json" "$BUILD_URL" "$WORK/dist" "$REPO/public" "$EVIDENCE/live" "$WORK" "$EVIDENCE" || status=1
+  as_builder "$NODE" "$HERE/browser.mjs" "$EVIDENCE/key.json" "$BUILD_URL" "$REPLAY_URL" "$WORK" "$EVIDENCE" || status=1
+
+  # Every key row has a result on each side it applies to, and every check has a key row.
+  local targets
+  "$NODE" "$HERE/cover.mjs" "$EVIDENCE/key.json" "$EVIDENCE" > "$EVIDENCE/cover.txt" || status=1
+  head -1 "$EVIDENCE/cover.txt"
+  targets=$(sed -n 's/^TARGETS //p' "$EVIDENCE/cover.txt")
+  [ -n "$targets" ] || { targets='targets unknown'; status=1; }
 
   "$HERE/cleanup.sh" "$REPO" || status=1
-  local summary
-  summary=$("$NODE" -e 'const s=require(process.argv[1]).summary; console.log(`targets_failed_build=${s.targetsFailedBuild} targets_failed_live=${s.targetsFailedLive}`)' "$EVIDENCE/checks.json" 2>/dev/null)
-  echo "VERIFY_RESULT=$([ $status = 0 ] && echo pass || echo fail) $summary build $build_id evidence $EVIDENCE"
+  echo "VERIFY_RESULT=$([ $status = 0 ] && echo pass || echo fail) $targets build $build_id evidence $EVIDENCE"
   return $status
 }
 run 2>&1 | tee "$EVIDENCE/summary.txt"

@@ -20,10 +20,15 @@ from every other. Mistyped URLs land on the 404 page.
 ## Driving it with Playwright and fetch
 
 - `browser.mjs` opens `/`, clicks `navigation "Main" > link "<label>"` for each nav row in
-  the key, and reads the landing path and `h1`. Screenshot `screens/T3-<label>.png`.
-- On `/about/` it clicks `header a[href="/"]` and expects `/`. Screenshot `screens/T4-mark.png`.
-- `checks.mjs` requests each page and `/does-not-exist/`, then every URL in `href`, `src`,
-  `srcset` and `meta content`, plus every `url()` in the stylesheets.
+  the key, and reads the landing path and `h1`. Screenshot `screens/<side>-T3-<label>.png`.
+- On `/about/` it clicks `header a[href="/"]` and expects `/`. Screenshot `screens/<side>-T4-mark.png`.
+- Both journeys run on the build preview and on the live replay, so a renamed live nav label
+  or a broken live mark link fails.
+- `checks.mjs` requests each page and `/does-not-exist/`, then every `href`, `src`, `poster`,
+  `srcset` candidate, `og:image`, and `url()` in style attributes, `<style>` blocks and the
+  stylesheets. Each reference is resolved against its page or stylesheet first, so a
+  relative `review-missing.png` on `/about/` is requested as `/about/review-missing.png`.
+- `live.sh` collects the same references the same way for production.
 
 ## Gotchas
 
