@@ -43,3 +43,8 @@ Read the home page, `/vivary/` and `/about/`.
 - T19 reads "as the latest release" as the status badges (`.status`) and the now line
   (`.now`), which are where the site states its current release. A history line elsewhere
   may name Sept 22, 2026.
+- The static T17 and T18 check sees inline `style` only. A stylesheet rule that hides the
+  version text is caught by the browser check, which requires the element holding the
+  text to pass `checkVisibility` (opacity included), be larger than 1px in both directions
+  and sit on the page. It does not detect `clip-path`, `color: transparent` or text
+  covered by another element. The site uses none of these on the release text.

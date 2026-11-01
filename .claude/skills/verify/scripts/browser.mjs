@@ -103,7 +103,12 @@ async function journeys(side, base) {
   const visibleRelease = (root) => page.evaluate(([sel, release]) => {
     const el = sel ? document.querySelector(sel)?.closest('article, section') : document.body;
     if (!el) return { text: false, link: false, found: false };
-    const seen = (n) => n.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) && n.getBoundingClientRect().width > 0;
+    // Visible means rendered, not transparent, larger than the 1px clip of a screen-reader-only
+    // element, and not moved off the page.
+    const seen = (n) => {
+      const r = n.getBoundingClientRect();
+      return n.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) && r.width > 1 && r.height > 1 && r.right > 0 && r.bottom > 0;
+    };
     // The element that holds the version text must itself be visible, not only its section.
     const holders = [];
     const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);

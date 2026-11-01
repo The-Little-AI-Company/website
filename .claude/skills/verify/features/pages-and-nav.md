@@ -41,3 +41,10 @@ from every other. Mistyped URLs land on the 404 page.
 - npmjs.com answers 403 to curl (a bot block), which T6 reports as WARN.
 - T23 compares `<main>` text with whitespace collapsed. Markup changes that keep the text
   pass, which is the intent.
+- Live T5 covers the resource types the site served on 2026-11-01: the HTML pages, their
+  stylesheets and `url()` fonts, the web app manifest and its icons, `srcset` and
+  `<picture><source>` images, preloads, robots.txt and sitemap.xml. It does not read CSS
+  `@import` without `url()`, `image-set()`, `xlink:href`, `imagesrcset`, or feeds. The site
+  uses none of them. A branch that adds one needs a key row and a collector change first.
+- `live.sh` decodes only `&amp;` in attribute values. A URL with another character
+  reference fails live T5 as not collected, so the gap fails closed.

@@ -210,15 +210,25 @@ async function judge(side) {
   } else {
     const bad = side.sameOrigin.filter(([c]) => c !== '200').map(([c, u]) => `${c} ${u}`);
     // live.sh collects with grep. The parser decides what it had to collect: every same-origin URL
-    // in the pages and in their manifest needs a status in same-origin.tsv.
+    // in the pages, in their stylesheets and in their manifest needs a status in same-origin.tsv.
     const siteOrigin = new URL(side.site).origin;
     const collected = new Set(side.sameOrigin.map(([, u]) => { const x = new URL(u); return x.origin === siteOrigin ? x.pathname + x.search : u; }));
     const expected = new Set();
     for (const [n, path] of [...Object.entries(PATHS), ['notfound', '/does-not-exist/']]) for (const u of urlsOf(doc[n], path)) if (isOwn(u)) expected.add(u);
-    for (const u of [...expected]) if (isManifest(u)) {
+    const kept = (u, kind) => {
       const file = join(liveDir, 'files', u.split('?')[0]);
-      if (!existsSync(file)) { bad.push(`manifest ${u} not kept by live.sh`); continue; }
-      const icons = manifestIcons(readFileSync(file, 'utf8'), u);
+      if (existsSync(file)) return readFileSync(file, 'utf8');
+      bad.push(`${kind} ${u} not kept by live.sh`);
+      return null;
+    };
+    for (const u of [...expected]) if (u.split('?')[0].endsWith('.css')) {
+      const body = kept(u, 'stylesheet');
+      for (const ref of body === null ? [] : cssUrls(body)) { const r = resolveRef(ref, SITE + u); if (r && isOwn(r)) expected.add(r); }
+    }
+    for (const u of [...expected]) if (isManifest(u)) {
+      const body = kept(u, 'manifest');
+      if (body === null) continue;
+      const icons = manifestIcons(body, u);
       if (!icons) bad.push(`manifest ${u} is not JSON`);
       for (const i of icons ?? []) if (isOwn(i)) expected.add(i);
     }
