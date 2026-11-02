@@ -37,8 +37,10 @@ Read and tab through any light or dark page, at a phone width and a desktop widt
   every light and dark page. It must be the same colour as the key's Light tokens table on a
   light page and its Dark tokens table on a dark page, so a later override fails. It also fails
   visible text on a light page whose colour is the light `--pink` on the light `--paper`. The
-  html part (`checks.mjs`) reads each page's `<style>` blocks and same-origin stylesheets in
-  document order and requires the last declaration of each token to be the key's value.
+  html part (`checks.mjs`) reads each page's `<style>` blocks and same-origin stylesheets and
+  requires each token to be declared with the key's value at least once. A shared stylesheet
+  that sets the dark values under a scoped selector passes it on light pages, and the browser
+  part decides which declaration wins.
 - T33 reads the computed style of `html`, `body`, every element in `body`, and their
   `::before` and `::after`. A shadow fails when its third length (the blur) is above 0. A
   `radial-gradient` passes only on a tile of 32px or less in both directions, which is how the
@@ -81,8 +83,10 @@ Read and tab through any light or dark page, at a phone width and a desktop widt
 - The strip's "Dark version" link in the prototype sits in `span.note`, a flex item after a
   list of phrases, not in a sentence. It is not exempt, so it needs 44 by 44 px. The same holds
   for the prototype's `.sechead` page-number links (50 by 36 px at 1440 px).
-- T32's html part does not read selectors or media queries. The browser part is the effective
-  value and the one that decides a token defined under another selector.
+- T32's html part does not read selectors or media queries, so it only proves the value is
+  declared. The browser part is the effective value and decides a token defined under another
+  selector.
+- T34 judges a font `src` by its full URL. Diagnostics shorten long URLs, the check does not.
 - T30 and T34 skip text inside `<svg>`, and T16, T19, T21, T22, T35 and T38 do not read text
   that CSS `content` generates. The approved prototype has no SVG text and uses `content` only
   as `""`.

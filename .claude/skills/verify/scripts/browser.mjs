@@ -336,7 +336,7 @@ async function journeys(side, base) {
         return {
           unreadable,
           faces: rules.map((r) => ({ family: r.style.getPropertyValue('font-family').trim().replace(/^["']|["']$/g, ''),
-            srcs: [...r.style.getPropertyValue('src').matchAll(/(url|local)\(\s*["']?([^"')]*)/g)].map((m) => (m[1] === 'local' ? `local(${m[2]})` : m[2].slice(0, 80))) })),
+            srcs: [...r.style.getPropertyValue('src').matchAll(/(url|local)\(\s*["']?([^"')]*)/g)].map((m) => (m[1] === 'local' ? `local(${m[2]})` : m[2])) })),
           body: firstFamily(getComputedStyle(document.body)),
           loaded: [...document.fonts].filter((x) => x.status === 'loaded').map((x) => x.family.replace(/^["']|["']$/g, '')),
           small: texts.filter(({ cs }) => firstFamily(cs) === 'VT323' && parseFloat(cs.fontSize) < 20).map(({ text, cs }) => `"${text}" ${cs.fontSize}`),

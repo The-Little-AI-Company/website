@@ -564,19 +564,20 @@ async function judge(side) {
     }
     report('T31', s, !bad.length, s === 'build' ? 'no season overlay on any page and no scheduled workflow' : 'no season overlay on any page', bad);
   }
-  // T32, the html part: the last declaration of each token in the page's CSS has the key's value.
-  // Selectors and media are not read. browser.mjs judges the computed values and the pink-text part.
+  // T32, the html part: the page's CSS declares each token with the key's value at least once.
+  // It does not read selectors or media, so it cannot tell which declaration wins. The effective
+  // value is judged by browser.mjs from the computed style, and both parts must pass.
   {
     const bad = [...darkDown];
-    const last = (css, name) => [...css.matchAll(new RegExp(`(?<![\\w-])${esc(name)}\\s*:\\s*([^;}!]*)`, 'gi'))].pop()?.[1].trim();
+    const values = (css, name) => [...css.matchAll(new RegExp(`(?<![\\w-])${esc(name)}\\s*:\\s*([^;}!]*)`, 'gi'))].map((m) => m[1].trim().toLowerCase());
     for (const [names, tokens] of [[lightNames, key.lightTokens], [darkUp, key.darkTokens]]) {
       for (const n of names) {
         const css = await pageCss(n);
         for (const c of css) if (c.text === null) bad.push(`${pathOf(n)} stylesheet ${c.where} unreadable`);
         const all = css.map((c) => c.text ?? '').join('\n');
         for (const [name, value] of Object.entries(tokens)) {
-          const got = last(all, name);
-          if (got?.toLowerCase() !== value.toLowerCase()) bad.push(`${pathOf(n)} CSS does not define ${name}: ${value}${got === undefined ? '' : `, its last declaration is ${got}`}`);
+          const got = values(all, name);
+          if (!got.includes(value.toLowerCase())) bad.push(`${pathOf(n)} CSS does not define ${name}: ${value}${got.length ? `, it declares ${[...new Set(got)].join(', ')}` : ''}`);
         }
       }
     }
