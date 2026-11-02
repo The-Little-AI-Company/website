@@ -78,13 +78,21 @@ done
 : > "$out/same-origin.tsv"
 : > "$out/external.tsv"
 : > "$out/css.txt"
+: > "$out/asset-cookies.tsv"
+own_get() { # own_get URL FILE: body to FILE, prints the status, records a Set-Cookie for T8
+  local code hdr="$out/asset.headers"
+  code=$(curl -sS -A "$ua" --max-time 30 -D "$hdr" -o "$2" -w '%{http_code}' "$1" 2>/dev/null || true)
+  grep -qi '^set-cookie:' "$hdr" 2>/dev/null && printf '%s\n' "$1" >> "$out/asset-cookies.tsv"
+  rm -f "$hdr"
+  echo "${code:-000}"
+}
 check_own() { # check_own URL: status of a same-origin URL. Stylesheets and manifests are kept and read too.
   local url=$1 rel=${1#"$site"} file
   rel=${rel%%\?*}; [ -z "$rel" ] && rel=/
   case $rel in
     *.webmanifest | */manifest.json)
       file="$out/files$rel"; mkdir -p "$(dirname "$file")"
-      code=$(curl -sS -A "$ua" --max-time 30 -o "$file" -w '%{http_code}' "$url" 2>/dev/null || true)
+      code=$(own_get "$url" "$file")
       printf '%s\t%s\n' "${code:-000}" "$url" >> "$out/same-origin.tsv"
       tr '\r\n\t' '   ' < "$file" | grep -oE '"src"[[:space:]]*:[[:space:]]*"[^"]*"' |
         sed -E 's/^"src"[[:space:]]*:[[:space:]]*"//; s/"$//; s#\\/#/#g' | sort -u |
@@ -93,7 +101,7 @@ check_own() { # check_own URL: status of a same-origin URL. Stylesheets and mani
         done ;;
     *.css)
       file="$out/files$rel"; mkdir -p "$(dirname "$file")"
-      code=$(curl -sS -A "$ua" --max-time 30 -o "$file" -w '%{http_code}' "$url" 2>/dev/null || true)
+      code=$(own_get "$url" "$file")
       printf '%s\t%s\n' "${code:-000}" "$url" >> "$out/same-origin.tsv"
       { printf '/* %s */\n' "$rel"; cat "$file"; echo; } >> "$out/css.txt"
       grep -oE 'url\([^)]*\)' "$file" | sed -E "s/^url\(['\"]?//; s/['\"]?\)$//" | sort -u |
@@ -101,7 +109,7 @@ check_own() { # check_own URL: status of a same-origin URL. Stylesheets and mani
           abs=$(resolve "$url" "$ref"); [ -n "$abs" ] && printf '%s\t%s\n' "$abs" "$rel" >> "$out/urls.tsv"
         done ;;
     *)
-      code=$(curl -sS -A "$ua" --max-time 30 -o /dev/null -w '%{http_code}' "$url" 2>/dev/null || true)
+      code=$(own_get "$url" /dev/null)
       printf '%s\t%s\n' "${code:-000}" "$url" >> "$out/same-origin.tsv" ;;
   esac
 }

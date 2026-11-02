@@ -104,10 +104,12 @@ async function journeys(side, base) {
     const el = sel ? document.querySelector(sel)?.closest('article, section') : document.body;
     if (!el) return { text: false, link: false, found: false };
     // Visible means rendered, not transparent, larger than the 1px clip of a screen-reader-only
-    // element, and not moved off the page.
+    // element, and inside the page area a visitor can scroll to.
+    const page = document.documentElement;
     const seen = (n) => {
       const r = n.getBoundingClientRect();
-      return n.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) && r.width > 1 && r.height > 1 && r.right > 0 && r.bottom > 0;
+      return n.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) && r.width > 1 && r.height > 1 &&
+        r.right > 0 && r.bottom > 0 && r.left < page.scrollWidth && r.top < page.scrollHeight;
     };
     // The element that holds the version text must itself be visible, not only its section.
     const holders = [];

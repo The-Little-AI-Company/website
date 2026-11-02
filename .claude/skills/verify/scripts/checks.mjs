@@ -29,14 +29,34 @@ function report(id, side, ok, name, details = []) {
 
 // Whole word, case-insensitive, letters and digits only count as word characters.
 const word = (term) => new RegExp(`(?<![\\p{L}\\p{N}])${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}])`, 'iu');
-const text = (el) => (el ? el.text.replace(/\s+/g, ' ').trim() : '');
+// Text the way a reader sees word boundaries: a block element or <br> separates words, inline
+// elements do not ("Hoo<span>lio</span>" stays one word, "<p>Zo</p><p>Company</p>" is two).
+const BLOCKS = new Set(['ADDRESS', 'ARTICLE', 'ASIDE', 'BLOCKQUOTE', 'BR', 'CAPTION', 'DD', 'DETAILS', 'DIALOG', 'DIV', 'DL',
+  'DT', 'FIELDSET', 'FIGCAPTION', 'FIGURE', 'FOOTER', 'FORM', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'HEADER', 'HGROUP', 'HR',
+  'LI', 'MAIN', 'NAV', 'OL', 'OPTION', 'P', 'PRE', 'SECTION', 'SUMMARY', 'TABLE', 'TBODY', 'TD', 'TFOOT', 'TH', 'THEAD',
+  'TITLE', 'TR', 'UL']);
+function textOf(el, skip) {
+  if (!el) return '';
+  const walk = (n) => {
+    if (n.nodeType === 3) return n.text;
+    if (skip(n)) return ' ';
+    const inner = n.childNodes.map(walk).join('');
+    return BLOCKS.has(n.tagName) ? ` ${inner} ` : inner;
+  };
+  return walk(el).replace(/\s+/g, ' ').trim();
+}
+// All text, hidden parts included.
+const text = (el) => textOf(el, () => false);
 
 // ---------- the two sides as one shape ----------
 const PATHS = { home: '/', callout: '/callout/', vivary: '/vivary/', about: '/about/', contact: '/contact/' };
 
 async function buildSide() {
+  // Every response the judge reads, pages and assets, is kept for T8's cookie check.
+  const cookies = [];
   const get = async (path) => {
     const res = await fetch(buildUrl + path, { redirect: 'manual' });
+    if (res.headers.has('set-cookie') && !cookies.includes(path)) cookies.push(path);
     return { status: res.status, headers: Object.fromEntries(res.headers), body: await res.text() };
   };
   const pages = {};
@@ -44,7 +64,7 @@ async function buildSide() {
   pages.notfound = await get('/does-not-exist/');
   pages.robots = await get('/robots.txt');
   pages.sitemap = await get('/sitemap.xml');
-  return { name: 'build', pages, get };
+  return { name: 'build', pages, get, assetCookies: () => cookies };
 }
 
 function liveSide() {
@@ -75,7 +95,9 @@ function readLive() {
     if (!pages[name]?.body) throw new Error(`page ${name} missing from the snapshot`);
   }
   const site = /^site (\S+)/m.exec(readFileSync(join(liveDir, 'meta.txt'), 'utf8'))?.[1] ?? SITE;
-  return { name: 'live', site, pages, age, sameOrigin: tsv('same-origin.tsv'), external: tsv('external.tsv'), css: readFileSync(join(liveDir, 'css.txt'), 'utf8') };
+  const cookieFile = join(liveDir, 'asset-cookies.tsv');
+  const assetCookies = () => (existsSync(cookieFile) ? readFileSync(cookieFile, 'utf8').split('\n').filter(Boolean) : null);
+  return { name: 'live', site, pages, age, assetCookies, sameOrigin: tsv('same-origin.tsv'), external: tsv('external.tsv'), css: readFileSync(join(liveDir, 'css.txt'), 'utf8') };
 }
 
 // Elements that make the browser fetch something, and the attribute holding the URL. The same
@@ -143,11 +165,7 @@ function isHidden(el) {
   if (NEVER_RENDERED.has(el.tagName) || el.getAttribute('hidden') !== undefined) return true;
   return /(display\s*:\s*none|visibility\s*:\s*hidden|opacity\s*:\s*0*\.?0*\s*(;|!|$))/i.test(el.getAttribute('style') ?? '');
 }
-function visibleText(el) {
-  if (!el) return '';
-  const walk = (n) => (n.nodeType === 3 ? n.rawText : isHidden(n) ? ' ' : n.childNodes.map(walk).join(''));
-  return walk(el).replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
-}
+const visibleText = (el) => textOf(el, isHidden);
 const shown = (el, root) => { for (let n = el; n && n !== root; n = n.parentNode) if (isHidden(n)) return false; return true; };
 
 // ---------- rows ----------
@@ -234,9 +252,15 @@ async function judge(side) {
     }
     for (const u of expected) if (!collected.has(u)) bad.push(`not collected by live.sh: ${u}`);
     report('T5', s, side.sameOrigin.length > 0 && !bad.length, `${side.sameOrigin.length} same-origin links and assets return 200`, bad);
-    const fails = side.external.filter(([c]) => /^5/.test(c)).map(([c, u]) => `${c} ${u}`);
+    // The same completeness rule for external links: every one the pages hold needs a status.
+    const external = new Set(side.external.map(([, u]) => { try { const x = new URL(u); x.hash = ''; return x.href; } catch { return u; } }));
+    const missing = [];
+    for (const [n, path] of [...Object.entries(PATHS), ['notfound', '/does-not-exist/']]) {
+      for (const u of urlsOf(doc[n], path)) if (!isOwn(u) && !external.has(u)) missing.push(`not collected by live.sh: ${u}`);
+    }
+    const fails = [...new Set(missing), ...side.external.filter(([c]) => /^5/.test(c)).map(([c, u]) => `${c} ${u}`)];
     const warns = side.external.filter(([c]) => !/^[23]/.test(c) && !/^5/.test(c)).map(([c, u]) => `${c} ${u}`);
-    report('T6', s, fails.length ? false : warns.length ? 'warn' : true, `${side.external.length} external links, ${fails.length} 5xx, ${warns.length} other failures`, [...fails, ...warns]);
+    report('T6', s, fails.length ? false : warns.length ? 'warn' : true, `${side.external.length} external links, ${fails.length} 5xx or not collected, ${warns.length} other failures`, [...fails, ...warns]);
   }
   const htmlPages = [...Object.keys(PATHS), 'notfound'];
   // T7: no script element.
@@ -246,6 +270,11 @@ async function judge(side) {
   {
     const bad = [];
     for (const n of [...htmlPages, 'robots', 'sitemap']) if (p[n].headers['set-cookie']) bad.push(`${n} Set-Cookie`);
+    // Assets too: on build every response the judge fetched, on live every same-origin URL
+    // live.sh requested. A snapshot without the asset header record fails.
+    const assets = side.assetCookies();
+    if (assets === null) bad.push('live.sh kept no asset-cookies.tsv');
+    for (const u of assets ?? []) bad.push(`asset ${u} Set-Cookie`);
     for (const n of htmlPages) if (/document\.cookie|localStorage|sessionStorage|navigator\.sendBeacon/.test(p[n].body)) bad.push(`${n} storage API`);
     report('T8', s, !bad.length, 'no cookie header and no storage API', bad);
   }

@@ -27,6 +27,9 @@ Load any page. Nothing outside littleaicompany.com is contacted, and the footer 
   part fails any resource from another origin in the loaders `tests/unit/third-party.test.ts`
   lists, in `srcset`, in style attributes, in `<style>` blocks and in the stylesheets. Plain
   anchors are links a visitor clicks, not loads, so they belong to T6.
+- T8 reads the `Set-Cookie` header of every response, not only the pages: on the build side
+  every URL `checks.mjs` fetches, on the live side every same-origin URL `live.sh` requests
+  (it lists them in `asset-cookies.tsv`). A snapshot without that file fails T8.
 - `run-all.sh` compares the third-party test file with `origin/dev` and requires its name in
   the vitest output of a passing T14.
 

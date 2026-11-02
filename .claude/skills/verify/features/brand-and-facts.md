@@ -35,6 +35,10 @@ Read the home page, `/vivary/` and `/about/`.
 - T22 matches each term as a whole word, case-insensitive, with letters and digits as word
   characters (the Reviewer accepted this reading, 2026-11-01). The heading "I. The main
   project" is removed before matching. The footer is outside `<main>` and keeps "Jeff Kazzee".
+- Text for T16, T21 and T22 keeps the word breaks a reader sees: a block element (`p`,
+  `div`, `li`, headings and the rest of the list in `checks.mjs`) or `<br>` separates words,
+  and an inline element does not. So `<p>Zo</p><p>Company</p>` is two words, and
+  `Hoo<span>lio</span>` is one.
 
 ## Gotchas
 
@@ -46,5 +50,8 @@ Read the home page, `/vivary/` and `/about/`.
 - The static T17 and T18 check sees inline `style` only. A stylesheet rule that hides the
   version text is caught by the browser check, which requires the element holding the
   text to pass `checkVisibility` (opacity included), be larger than 1px in both directions
-  and sit on the page. It does not detect `clip-path`, `color: transparent` or text
+  and sit inside the page area a visitor can scroll to. It does not detect `clip-path`, `color: transparent` or text
   covered by another element. The site uses none of these on the release text.
+- COVER checks that T17 and T18 have a result on each side, not that both producers ran.
+  `checks.mjs` and `browser.mjs` each write one, and COVER passes if one is missing.
+  `run-all.sh` always runs both, and `summary.txt` shows both lines.
