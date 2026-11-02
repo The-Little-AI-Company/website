@@ -1,7 +1,8 @@
 import type { APIRoute } from 'astro';
 
 // Every page of the site that a search engine should list: the pages in this folder, minus the 404 page.
-// The redirects from the old site are not pages here, so they are not listed either.
+// The redirects from the old site are not pages here, so they are not listed either. The dark pages in dark/
+// are not listed: each names its light page as canonical.
 const pages = import.meta.glob('./*.astro');
 const hidden = new Set(['404']);
 

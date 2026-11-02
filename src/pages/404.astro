@@ -1,18 +1,25 @@
 ---
+// The one page with no dark twin: it answers at every unknown address. Its "Dark version" link goes to /dark/.
 import Base from '../layouts/Base.astro';
-import Button from '../components/Button.astro';
-import PageHead from '../components/PageHead.astro';
+import { href } from '../data/pages';
 ---
 
 <Base
   title="Page not found"
   description="That address doesn’t lead anywhere on this site. Start at the home page, or contact me if a link on this site is broken."
-  noindex
+  variant="light"
+  current="404"
 >
-  <PageHead title="Page not found" lede="That address doesn’t lead anywhere on this site." center>
-    <div class="actions">
-      <Button href="/" variant="primary">Go to the home page</Button>
-      <Button href="/contact/">Contact</Button>
+  <section class="ihero solo" aria-labelledby="hero-h">
+    <div class="wrap">
+      <div class="hero-text">
+        <h1 class="display" id="hero-h">Page not found</h1>
+        <p class="lede">That address doesn’t lead anywhere on this site.</p>
+        <div class="actions">
+          <a class="btn btn-primary" href={href('100', 'light')}><span class="n">100</span>Go to the home page</a>
+          <a class="btn btn-secondary" href={href('600', 'light')}><span class="n">600</span>Contact</a>
+        </div>
+      </div>
     </div>
-  </PageHead>
+  </section>
 </Base>

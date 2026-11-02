@@ -1,0 +1,49 @@
+/* Direction K dark variant for littleaicompany.com. Loaded only by the /dark/ pages, after site.css.
+   Same three inks and the same type. The paper turns to night, and text and rules turn to paper.
+   No media query reads the OS color setting: dark is only ever a visitor's explicit choice. */
+:root {
+  --paper: #141414;          /* page ground */
+  --paper-white: #1F1F1F;    /* raised surfaces: plates, mark sheet, odd lanes */
+  --ink: #F1F0EB;            /* text, borders, rules, focus ring */
+  --ink-soft: #DCDAD3;       /* lede and long body text */
+  --ink-muted: #C9C9C4;      /* index descriptions */
+  --ink-faint-on-dark: #C9C9C4;
+  --pink-text: #FF48B0;      /* pink passes as text on the night ground */
+  --pink-dot: #4A1A38;       /* halftone dots on the dark mark sheet */
+  --pink-dot-dark: #3A1530;  /* halftone dots on the dark house-rules band */
+  --band: #050505;           /* bands sit one step below the ground and get a ruled edge */
+  --on-band: #F1F0EB;
+  --on-fill: #161616;        /* text on pink and yellow stays ink */
+}
+html { color-scheme: dark; }
+
+/* Bands are separated from the ground by rules, not by brightness. */
+.strip { border-bottom: 2px solid var(--pink); }
+.band-ink, .site-footer { border-top: 2px solid var(--ink); }
+.site-header { border-bottom-color: var(--ink); }
+
+/* Hard shadows print in pink and yellow on the dark ground. Paper-colored shadows would glare. */
+.btn-primary { box-shadow: 4px 4px 0 var(--yellow); }
+.plate, .limits { box-shadow: 5px 5px 0 var(--pink); }
+.sheet { box-shadow: 8px 8px 0 var(--pink); }
+
+/* The mark overprints with normal blending. Multiply on a dark sheet would turn both inks black. */
+.sheet .mark .y, .sheet .mark .p { mix-blend-mode: normal; }
+.sheet .cap { background: var(--paper-white); }
+
+/* House rules: a full pink band glares at night, so the pink moves into the dots, the rules and the tags. */
+.band-pink { background-color: var(--paper); border-color: var(--pink); }
+.band-pink .intro { background: var(--paper-white); }
+.on-pink .tag { background: var(--pink); color: var(--on-fill); border-color: var(--pink); }
+.rules { border-top-color: var(--pink); }
+.rule .sub { border: 2px solid var(--pink); }
+
+/* Vivary status: the yellow band becomes a ruled dark band with yellow edges. */
+.status-band { background: var(--paper-white); color: var(--ink); border-top: 4px solid var(--yellow); border-bottom: 4px solid var(--yellow); }
+.status-band .lede { color: var(--ink); }
+.status-band .sechead.ruled { border-bottom-color: var(--yellow); }
+.limits { background: var(--paper); }
+
+/* The white button-bar cell would be the brightest thing on the page. It keeps its place as a ruled dark cell. */
+.buttonbar .c3 { background: var(--paper-white); color: var(--ink); }
+.buttonbar a { border-color: var(--paper); }

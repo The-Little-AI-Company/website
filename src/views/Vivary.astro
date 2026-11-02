@@ -1,0 +1,98 @@
+---
+import Base from '../layouts/Base.astro';
+import Mosaic from '../components/Mosaic.astro';
+import type { Variant } from '../data/pages';
+import { vivary } from '../data/tools';
+
+interface Props {
+  variant: Variant;
+}
+const { variant } = Astro.props;
+const { prerelease } = vivary;
+
+const lanes = [
+  { k: 'Work', title: 'Work on a project', text: 'Open an existing folder as a project, or create a new one. Chat with Claude Code or Codex in it. The agent can read files, change files, and run tools.' },
+  { k: 'Keep', title: 'Keep what matters', text: 'Save project facts as readable files in the project, and search the project’s files.' },
+  { k: 'Check', title: 'Check project health', text: 'Run a project health check with the Python that ships inside the app.' },
+  { k: 'Automate', title: 'Automate', text: 'Set up automations that run on a schedule, on an event, or from a webhook while Vivary is open. Provider-backed automations are not yet tested on the installed app.' },
+];
+---
+
+<Base
+  title="Vivary"
+  description="A desktop workspace for AI agents on your own projects. Agent chat, project files, tools, and memory in one app. Windows first. Beta 0.1.0-beta.1 is out."
+  variant={variant}
+  current="120"
+>
+  <section class="ihero" aria-labelledby="hero-h">
+    <div class="wrap">
+      <div class="hero-text">
+        <p class="kicker"><span class="tag">120</span><span class="status">{vivary.status} · <span class="ver">{prerelease.tag}</span> · {prerelease.date}</span></p>
+        <h1 class="display" id="hero-h">Vivary</h1>
+        <p class="tagline">Your projects. Your agents. <span class="hl">Your machine.</span></p>
+        <p class="lede">{vivary.summary}</p>
+        <div class="actions">
+          <a class="btn btn-primary" href={vivary.primary.href}>{vivary.primary.label}</a>
+          <a class="btn btn-secondary" href={vivary.queue}>Release queue on GitHub</a>
+        </div>
+      </div>
+      <aside class="plate" aria-labelledby="where-h">
+        <header><h3 id="where-h">Where it runs</h3><span class="vt">Beta.1</span></header>
+        <div class="pad">
+          <ul class="platforms">
+            <li><span class="os"><span class="dh">Windows 10, 11</span></span><span class="yes">Available</span></li>
+            <li><span class="os">macOS</span><span class="later">Planned</span></li>
+            <li><span class="os">Linux</span><span class="later">Planned</span></li>
+          </ul>
+        </div>
+        <dl class="ruled-top">
+          <div class="kv"><dt>Comes as</dt><dd>An installer and a portable ZIP, x64</dd></div>
+          <div class="kv"><dt>Admin rights</dt><dd>None. It installs for your Windows account only.</dd></div>
+          <div class="kv"><dt>Coding</dt><dd>Claude Code or Codex, installed and signed in on the same computer</dd></div>
+          <div class="kv"><dt>License</dt><dd>MIT</dd></div>
+        </dl>
+      </aside>
+    </div>
+  </section>
+
+  <section class="section tight-top" aria-labelledby="what-h">
+    <div class="wrap">
+      <div class="sechead ruled">
+        <span class="tag">120</span>
+        <h2 id="what-h">What it is</h2>
+      </div>
+      <p class="lede section-lede">One app where you open a project, talk to an agent about it, and watch what the agent does to your files. Vivary runs on your computer. Claude Code or Codex does the coding work and must be installed and signed in on the same computer.</p>
+      <div class="lanes">
+        {lanes.map((l) => <article class="lane"><span class="k">{l.k}</span><h3>{l.title}</h3><p>{l.text}</p></article>)}
+        <article class="lane"><span class="k">Later</span><h3>Self-hosted web, later</h3><p>Work on a self-hosted web version is tracked in <a href={vivary.queue}>milestone 1</a>. Remote access from another device is not yet tested on the installed app, so beta.1 is a desktop release.</p></article>
+        <article class="lane"><span class="k">Ask</span><h3>What it asks of you</h3><p>No Vivary account. Your Claude Code or Codex sign-in is yours and separate. Windows only for now. Mac and Linux builds are planned.</p></article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section status-band flush-top" aria-labelledby="status-h">
+    <Mosaic tone="ink" />
+    <div class="wrap">
+      <div class="sechead ruled">
+        <span class="tag tag-band">120</span>
+        <h2 id="status-h">Status: beta</h2>
+      </div>
+      <div class="status-grid">
+        <div class="body">
+          <p class="lede">Version {prerelease.tag.slice(1)} was published on {prerelease.date} as a <a href={prerelease.href}>GitHub prerelease</a>. It comes as an installer and as a portable ZIP, for Windows 10 and 11 (x64).</p>
+          <p>Neither is code signed, so Windows can show “Windows protected your PC”. Select More info, then Run anyway. Each file has a checksum, and the release notes show how to check it. The <a href={vivary.queue}>release queue</a> lists what is verified and what is still required, in the open. Open source under MIT.</p>
+          <p>Found a bug? <a href={`${vivary.repo}/issues/new`}>Open an issue</a>. Include the release tag, your Windows version, the steps, and the error text. Do not attach credentials or private conversations. More about the project is at <a href="https://vivaryagent.xyz">vivaryagent.xyz</a>.</p>
+        </div>
+        <div class="limits">
+          <h3>Known limits</h3>
+          <ul>
+            <li>Vivary runs one coding conversation at a time on a computer.</li>
+            <li>Provider-backed automations, remote access from another device, and an upgrade over an earlier install are not yet tested on the installed app.</li>
+            <li>Rolling back to an earlier version after an upgrade is not supported, so back up your Vivary data before you upgrade.</li>
+          </ul>
+          <p class="small">The <a href={prerelease.href}>release notes</a> list the rest.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+</Base>

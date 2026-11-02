@@ -1,7 +1,6 @@
 /**
  * A small CSS reader for the tests. It is not a full CSS parser: it understands
- * exactly what this site's stylesheets (and their minified build output) contain,
- * and it is covered by tests/unit/helpers.test.ts.
+ * exactly what this site's stylesheets contain.
  *
  * It handles comments, strings, parentheses (so `url(data:...;base64,...)` does
  * not end a declaration early), nested at-rules, and CSS nesting.
@@ -165,18 +164,6 @@ export function allBlocks(nodes: CssBlock[]): CssBlock[] {
 
 const squash = (s: string): string => s.replace(/\s+/g, '').toLowerCase();
 
-export function isDarkScheme(block: CssBlock): boolean {
-  return block.kind === 'at' && block.name === 'media' && squash(block.prelude).includes('prefers-color-scheme:dark');
-}
-
-export function isReducedMotion(block: CssBlock): boolean {
-  return block.kind === 'at' && block.name === 'media' && squash(block.prelude).includes('prefers-reduced-motion:reduce');
-}
-
-export function isForcedColors(block: CssBlock): boolean {
-  return block.kind === 'at' && block.name === 'media' && squash(block.prelude).includes('forced-colors:active');
-}
-
 const isRoot = (block: CssBlock): boolean => block.kind === 'rule' && squash(block.prelude) === ':root';
 
 /** Custom properties set by `:root` rules at the top level, later rules winning. */
@@ -187,54 +174,6 @@ export function rootVariables(nodes: CssBlock[]): Map<string, string> {
     for (const d of node.declarations) vars.set(d.prop, d.value);
   }
   return vars;
-}
-
-/** Declarations set by `:root` inside `@media (prefers-color-scheme: dark)`. */
-export function darkRootVariables(nodes: CssBlock[]): Map<string, string> {
-  const vars = new Map<string, string>();
-  for (const media of nodes.filter(isDarkScheme)) {
-    for (const rule of media.children.filter(isRoot)) {
-      for (const d of rule.declarations) vars.set(d.prop, d.value);
-    }
-  }
-  return vars;
-}
-
-/** True when the declaration sits inside a block matching `test`. */
-export function inside(ctx: DeclarationContext, test: (block: CssBlock) => boolean): boolean {
-  return ctx.chain.some(test);
-}
-
-/** Pixel values of every width condition in `@media` and `@container` queries. */
-export function breakpoints(nodes: CssBlock[]): number[] {
-  const found: number[] = [];
-  for (const block of allBlocks(nodes)) {
-    if (block.kind !== 'at' || (block.name !== 'media' && block.name !== 'container')) continue;
-    const params = squash(block.prelude);
-    if (!params.includes('width')) continue;
-    for (const m of params.matchAll(/(\d*\.?\d+)(px|rem|em)/g)) {
-      const n = Number(m[1]);
-      found.push(m[2] === 'px' ? n : n * 16);
-    }
-  }
-  return found;
-}
-
-/**
- * Normalises a value so equal values written differently compare equal:
- * lower case, no extra spaces, no leading zeros, no `!important`, double quotes.
- */
-export function normalizeValue(value: string): string {
-  return value
-    .replace(/!\s*important/gi, '')
-    .replace(/'/g, '"')
-    .replace(/\s+/g, ' ')
-    .replace(/\s*,\s*/g, ',')
-    .replace(/\(\s+/g, '(')
-    .replace(/\s+\)/g, ')')
-    .replace(/(^|[^\d])0+(\.\d)/g, '$1$2')
-    .trim()
-    .toLowerCase();
 }
 
 /** Splits a `font-family` list into bare family names. */

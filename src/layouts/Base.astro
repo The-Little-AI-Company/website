@@ -1,20 +1,36 @@
 ---
-import SiteFooter from '../components/SiteFooter.astro';
-import SiteNav from '../components/SiteNav.astro';
-import '../styles/tokens.css';
-import '../styles/global.css';
+// The page frame: the head, the top strip, the header, main, the page index, the button bar and the footer.
+// Every page but the 404 page exists twice, light at its path and dark under /dark/. Each variant links only within
+// itself, except the one link to the same page in the other variant.
+import { markPath } from '../data/mark';
+import { href, index, nav, pages, within, type PageNumber, type Variant } from '../data/pages';
 
 interface Props {
   title: string;
   description: string;
-  // Keeps the page out of search results and gives it no canonical address (the 404 page).
-  noindex?: boolean;
+  variant: Variant;
+  /** The page's number, or '404' for the page-not-found page. */
+  current: '100' | '110' | '120' | '500' | '600' | '404';
 }
-const { title, description, noindex = false } = Astro.props;
-const canonical = new URL(Astro.url.pathname, Astro.site);
+const { title, description, variant, current } = Astro.props;
+
+const dark = variant === 'dark';
+const site = Astro.site!;
+const path = current === '404' ? undefined : (pages[current] as { path: string }).path;
+// The 404 page answers at every unknown address, so it has no canonical URL and offers the dark home page.
+const canonical = path && new URL(path, site).href;
+const other = dark
+  ? { label: 'Light version', href: path! }
+  : { label: 'Dark version', href: within(path ?? '/', 'dark') };
 const fullTitle = title === 'The Little AI Company' ? title : `${title}. The Little AI Company`;
-const ogImage = new URL('/og.png', Astro.site);
+const ogImage = new URL('/og.png', site).href;
 const ogImageAlt = 'The Little AI Company, with its skull bunny mark and the line Tools for the work you keep doing by hand.';
+
+const link = (n: PageNumber) => href(n, variant);
+const isCurrent = (n: PageNumber) => (n === current ? 'page' : undefined);
+// Four cells in pink, yellow, white and ink. On a page that has a cell, that cell leads back to the index.
+const bar: [PageNumber, string][] = ([['120', 'Vivary'], ['110', 'Callout'], ['300', 'Arcade'], ['600', 'Contact']] as [PageNumber, string][])
+  .map(([n, label]) => (n === current ? ['100', 'Index'] : [n, label]));
 ---
 
 <!doctype html>
@@ -22,24 +38,25 @@ const ogImageAlt = 'The Little AI Company, with its skull bunny mark and the lin
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    {dark && <style is:inline>html { background: #141414; color: #F1F0EB; }</style>}
     <title>{fullTitle}</title>
     <meta name="description" content={description} />
-    {noindex && <meta name="robots" content="noindex" />}
-    {!noindex && <link rel="canonical" href={canonical} />}
+    <meta name="color-scheme" content={variant} />
+    <meta name="theme-color" content={dark ? '#141414' : '#F1F0EB'} />
+    {canonical ? <link rel="canonical" href={canonical} /> : <meta name="robots" content="noindex" />}
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="icon" href="/favicon.ico" sizes="32x32" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/site.webmanifest" />
-    <link rel="preload" href="/fonts/instrument-serif-latin.woff2" as="font" type="font/woff2" crossorigin />
-    <link rel="preload" href="/fonts/instrument-sans-latin.woff2" as="font" type="font/woff2" crossorigin />
-    <meta name="color-scheme" content="light dark" />
-    <meta name="theme-color" content="#f6f3ec" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#15120f" media="(prefers-color-scheme: dark)" />
+    <link rel="preload" href="/fonts/dela-gothic-one-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/zen-kaku-gothic-new-400-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="/styles/site.css" />
+    {dark && <link rel="stylesheet" href="/styles/dark.css" />}
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="The Little AI Company" />
     <meta property="og:title" content={fullTitle} />
     <meta property="og:description" content={description} />
-    {!noindex && <meta property="og:url" content={canonical} />}
+    {canonical && <meta property="og:url" content={canonical} />}
     <meta property="og:image" content={ogImage} />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
@@ -49,10 +66,52 @@ const ogImageAlt = 'The Little AI Company, with its skull bunny mark and the lin
   </head>
   <body>
     <a class="skip" href="#main">Skip to content</a>
-    <SiteNav current={Astro.url.pathname} />
+
+    <div class="strip on-ink">
+      <div class="wrap">
+        <span><span class="here">P{current}</span> {current === '404' ? 'PAGE NOT FOUND' : `LITTLE AI ${current}`}</span>
+        <span class="note">rural Idaho · no cookies · no analytics · <a class="switch" href={other.href}>{other.label}</a></span>
+      </div>
+    </div>
+
+    <header class="site-header">
+      <div class="wrap">
+        <a class="brand" href={link('100')} aria-current={isCurrent('100')}>
+          <svg viewBox="0 0 10 11" shape-rendering="crispEdges" aria-hidden="true"><path d={markPath} /></svg>
+          <span>The Little AI Company</span>
+        </a>
+        <nav aria-label="Pages">
+          <ul class="nav">
+            {nav.map((n) => <li><a href={link(n)} aria-current={isCurrent(n)}><span class="n">{n}</span>{pages[n].label}</a></li>)}
+          </ul>
+        </nav>
+      </div>
+    </header>
+
     <main id="main">
       <slot />
     </main>
-    <SiteFooter />
+
+    <nav class="pageindex" aria-label="Page index">
+      <div class="wrap">
+        <span class="lbl" aria-hidden="true">Page index</span>
+        {index.map((n) => <a href={link(n)} aria-current={isCurrent(n)}><span class="n">{n}</span>{pages[n].label}</a>)}
+      </div>
+    </nav>
+
+    <nav class="buttonbar" aria-label="Quick pages">
+      {bar.map(([n, label], i) => <a class={i === 3 ? 'c4 on-ink' : `c${i + 1}`} href={link(n)}><span class="n">{n}</span>{label}</a>)}
+    </nav>
+
+    <footer class="site-footer on-ink">
+      <div class="wrap">
+        <span>The Little AI Company · rural Idaho · This site sets no cookies, loads nothing from third parties, and keeps no analytics.</span>
+        <nav aria-label="Elsewhere">
+          <a href="https://github.com/The-Little-AI-Company">GitHub</a>
+          <a href="https://jeffkazzee.dev">JeffKazzee.dev</a>
+          <a href={other.href}>{other.label}</a>
+        </nav>
+      </div>
+    </footer>
   </body>
 </html>

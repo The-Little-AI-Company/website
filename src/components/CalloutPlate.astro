@@ -1,0 +1,19 @@
+---
+// Callout's facts as a teletext data plate. The home page and the Callout page both show it, so they
+// cannot disagree about what Callout runs on, its license, or which version is out.
+import { calloutPlate } from '../data/tools';
+
+interface Props {
+  version: string;
+}
+const { version } = Astro.props;
+const { rows, quote, caption } = calloutPlate(version);
+---
+
+<article class="plate">
+  <header><h3>Callout</h3><span class="vt">Released · <span class="ver">{version}</span></span></header>
+  <dl>
+    {rows.map(({ term, detail }) => <div class="kv"><dt>{term}</dt><dd>{detail}</dd></div>)}
+  </dl>
+  <blockquote>“{quote}”<cite>{caption}</cite></blockquote>
+</article>

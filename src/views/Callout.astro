@@ -1,0 +1,102 @@
+---
+import Base from '../layouts/Base.astro';
+import CalloutPlate from '../components/CalloutPlate.astro';
+import Mosaic from '../components/Mosaic.astro';
+import type { Variant } from '../data/pages';
+import { callout, latestVersion } from '../data/tools';
+import type { Term } from '../data/types';
+
+interface Props {
+  variant: Variant;
+}
+const { variant } = Astro.props;
+const version = await latestVersion(callout.version);
+
+const sections: { id: string; heading: string; intro?: string; lanes: Term[] }[] = [
+  {
+    id: 'does-h',
+    heading: 'What it does',
+    intro: 'Select text anywhere on Windows, press the hotkey, and a small popover answers two questions.',
+    lanes: [
+      { term: 'Fast lane, under a second', detail: 'Is this text trying to manipulate you? Callout scores the passage against a battery of manipulation signals, such as false urgency, loaded framing, and appeals that stand in for evidence.' },
+      { term: 'Deep lane, a few seconds', detail: 'Do the specific claims hold up? Callout pulls out the checkable claims, looks first at the sources the text cites, then searches the web, and shows you what it found. Nothing is shown without a source. Unsure is a real answer.' },
+    ],
+  },
+  {
+    id: 'how-h',
+    heading: 'How it works',
+    intro: 'Three parts with one rule between them. The model that judges never writes prose, and the model that writes prose never judges.',
+    lanes: [
+      { term: 'A judging model', detail: 'Returns probabilities, never sentences. It scores what kind of content this is, the manipulation signals in it, whether a passage is relevant, whether evidence supports a claim, and every sentence the helper writes.' },
+      { term: 'A writing helper', detail: 'Any OpenAI-compatible or Anthropic endpoint. It extracts claims, drafts search queries, reads screenshots, and writes the two-sentence summary. Everything it writes goes back through the judge.' },
+      { term: 'A rules file', detail: 'Every threshold, cap, and question lives in one readable file in the repository. Nothing is tuned behind a server.' },
+    ],
+  },
+  {
+    id: 'stays-h',
+    heading: 'What stays on your machine',
+    lanes: [
+      { term: 'No server', detail: 'No account, no telemetry. The text you check goes to the three APIs you configure and to the pages Callout fetches for evidence, and nowhere else.' },
+      { term: 'Your keys', detail: 'You bring your own API keys. They sit in Windows Credential Manager, never in a plain-text file.' },
+      { term: 'Your history', detail: 'Off by default. Usage counters stay local.' },
+    ],
+  },
+];
+---
+
+<Base
+  title="Callout"
+  description="Press a hotkey over any text. Callout says whether it is trying to manipulate you and whether its claims hold up. Windows, bring your own keys, no server."
+  variant={variant}
+  current="110"
+>
+  <section class="ihero" aria-labelledby="hero-h">
+    <div class="wrap">
+      <div class="hero-text">
+        <p class="kicker"><span class="tag">110</span><span class="status">{callout.status} · <span class="ver">{version}</span></span></p>
+        <h1 class="display" id="hero-h">Callout</h1>
+        <p class="tagline">Press a key. <span class="hl">Get the receipts.</span></p>
+        <p class="lede">{callout.summary}</p>
+        <div class="actions">
+          <a class="btn btn-primary" href={callout.primary.href}>{callout.primary.label}</a>
+          <a class="btn btn-secondary" href={callout.repo}>Source on GitHub</a>
+        </div>
+      </div>
+      <CalloutPlate version={version} />
+    </div>
+  </section>
+
+  {sections.map((s, i) => (
+    <section class={i === 0 ? 'section tight-top' : 'section flush-top'} aria-labelledby={s.id}>
+      <div class="wrap">
+        <div class="sechead ruled">
+          <span class="tag">110</span>
+          <h2 id={s.id}>{s.heading}</h2>
+        </div>
+        {s.intro && <p class="lede section-lede">{s.intro}</p>}
+        <div class={s.lanes.length === 2 ? 'lanes two' : 'lanes'}>
+          {s.lanes.map(({ term, detail }) => <article class="lane"><h3>{term}</h3><p>{detail}</p></article>)}
+        </div>
+      </div>
+    </section>
+  ))}
+
+  <section class="section status-band flush-top" id="get-it" aria-labelledby="get-h">
+    <Mosaic tone="ink" />
+    <div class="wrap">
+      <div class="sechead ruled">
+        <span class="tag tag-band">110</span>
+        <h2 id="get-h">Get it</h2>
+      </div>
+      <div class="status-grid">
+        <div class="body">
+          <p class="lede">Download the installer for Windows 10 and 11, run it, and paste your API keys into Settings. No account. Open source under MIT.</p>
+          <div class="actions">
+            <a class="btn btn-primary" href={callout.primary.href}>{callout.primary.label}</a>
+          </div>
+          <p class="small">The installer is unsigned for now, so Windows SmartScreen warns on first run. Choose More info, then Run anyway. The source is on GitHub if you’d rather build it yourself.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+</Base>

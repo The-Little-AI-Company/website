@@ -1,0 +1,148 @@
+---
+import Base from '../layouts/Base.astro';
+import CalloutPlate from '../components/CalloutPlate.astro';
+import Mosaic from '../components/Mosaic.astro';
+import { markPath } from '../data/mark';
+import { href, type PageNumber, type Variant } from '../data/pages';
+import { callout, latestVersion, vivary } from '../data/tools';
+
+interface Props {
+  variant: Variant;
+}
+const { variant } = Astro.props;
+const link = (n: PageNumber) => href(n, variant);
+const version = await latestVersion(callout.version);
+const { prerelease } = vivary;
+
+const rows: { n: PageNumber; name: string; feat?: string; desc: string; status: string; version?: string }[] = [
+  { n: '120', name: 'Vivary', feat: 'The main project', desc: 'A desktop workspace for working with AI agents on your own projects. Runs on Windows. Needs no Vivary account.', status: 'Beta' },
+  { n: '110', name: 'Callout', desc: 'Press a hotkey over anything you are reading. It tells you whether the text is trying to manipulate you.', status: 'Released', version },
+  { n: '300', name: 'LLM Arcade', desc: 'A social arcade with 14 games. AI agents wrote every line.', status: 'Alpha' },
+  { n: '400', name: 'Open World Factbook', desc: 'An open-source database of 262 countries and territories.', status: 'Shipped' },
+];
+
+const rules = [
+  { n: '201', term: 'You decide', detail: 'The tool proposes and you approve. A human gate is a feature, not a speed bump.' },
+  { n: '202', term: 'You can read everything', detail: 'State is plain files on a machine you control, not a hosted store you cannot open.' },
+  { n: '203', term: 'You keep learning', detail: 'A tool that thinks for you leaves you weaker. These tools show their work so you get sharper.' },
+  { n: '204', term: 'Sources or silence', detail: 'Every claim carries where it came from. Unsure is a real answer.' },
+];
+---
+
+<Base
+  title="The Little AI Company"
+  description="The Little AI Company makes Vivary, a desktop workspace for AI agents, and Callout, which checks what you read. Both keep you in charge."
+  variant={variant}
+  current="100"
+>
+  <section class="hero" aria-labelledby="hero-h">
+    <div class="wrap">
+      <div class="hero-text">
+        {/* The verify key reads the article around #feature-vivary as the home Vivary section, which must show and link the release. */}
+        <article>
+          <p class="newstag" id="feature-vivary">Vivary <a class="ver" href={prerelease.href}>{prerelease.tag}</a> is out for Windows · {prerelease.date}</p>
+        </article>
+        <h1 class="display" id="hero-h">Tools for the work you keep doing <span class="hl">by hand.</span></h1>
+        <p class="lede">The Little AI Company makes Vivary, a desktop workspace for AI agents, and Callout, a hotkey that checks what you read. Small tools that keep you in charge of the AI you use. Jeff Kazzee builds them in rural Idaho.</p>
+        <div class="actions">
+          <a class="btn btn-primary" href={link('120')}><span class="n">120</span>See Vivary</a>
+          <a class="btn btn-secondary" href={`${link('110')}#get-it`}><span class="n">110</span>Get Callout</a>
+        </div>
+      </div>
+      <div class="hero-mark">
+        <div class="sheet">
+          <span class="ptag">P100</span>
+          <svg class="mark" viewBox="-0.2 -0.2 10.8 11.7" shape-rendering="crispEdges" role="img" aria-label="The Little AI Company mark, a pixel skull bunny"><path class="y" transform="translate(0.35 0.3)" d={markPath} /><path class="p" d={markPath} /></svg>
+          <span class="cap" aria-hidden="true">Two inks · one bunny</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section tight-top" id="p100-index" aria-labelledby="index-h">
+    <div class="wrap">
+      <div class="mosaic-wrap"><Mosaic tone="pink" /></div>
+      <div class="sechead ruled spaced">
+        <span class="tag">100</span>
+        <h2 id="index-h">The index</h2>
+        <span class="aside"><span class="dh">4 pages · 2 demos</span></span>
+      </div>
+      <ol class="index">
+        {rows.map((r) => (
+          <li><a class="row" href={link(r.n)}>
+            <span class="num">{r.n}</span>
+            <span><span class="name">{r.name}</span>{r.feat && <span class="feat">{r.feat}</span>}<br />
+            <span class="desc">{r.desc}</span></span>
+            <span class="status">{r.status}{r.version && <> <span class="ver">{r.version}</span></>}</span>
+          </a></li>
+        ))}
+      </ol>
+      <p class="also"><b>Also on the shelf · demos</b>
+        <span><a href="https://puckwork.vercel.app">Puckwork</a>. Air hockey with a simulated air cushion, in one canvas file.</span>
+        <span><a href="https://neon-noir-detective-agency.vercel.app">Neon Noir Detective Agency</a>. A fictional agency site in pure HTML and CSS.</span>
+      </p>
+    </div>
+  </section>
+
+  <section class="section flush-top" aria-labelledby="plates-h">
+    <div class="wrap">
+      <div class="sechead ruled">
+        <a class="tag" href={link('110')}>110</a>
+        <h2 id="plates-h">Ready to download: Callout</h2>
+      </div>
+      <div class="plates">
+        <div class="body">
+          <p class="lede">{callout.summary}</p>
+          <div class="actions">
+            <a class="btn btn-primary" href={callout.primary.href}>{callout.primary.label}</a>
+            <a class="btn btn-secondary" href={link('110')}><span class="n">110</span>More about Callout</a>
+          </div>
+        </div>
+        <CalloutPlate version={version} />
+      </div>
+    </div>
+  </section>
+
+  <section class="section band-pink on-pink" id="p200" aria-labelledby="rules-h">
+    <div class="wrap">
+      <div class="sechead">
+        <span class="tag">200</span>
+        <h2 id="rules-h">How the tools work</h2>
+      </div>
+      <p class="intro">Memory in files you can open. Claims with the sources behind them. Nothing runs that you can’t see, stop, or undo.</p>
+      <ol class="rules">
+        {rules.map((r) => <li class="rule"><span class="sub">{r.n}</span><h3>{r.term}</h3><p>{r.detail}</p></li>)}
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="who-h">
+    <div class="wrap split">
+      <div class="sechead">
+        <a class="tag" href={link('500')}>500</a>
+        <h2 id="who-h">Who runs this</h2>
+      </div>
+      <div class="body">
+        <p class="lede">An independent software studio with one person in it. Most AI products are built to take work off your hands. Some of that is useful. Past a point it takes your judgment with it.</p>
+        <p>The other kind of tool shows where a claim came from and keeps its state in files you can open. Callout and Vivary are open source, and both run on machines you control.</p>
+        <ul class="terms">
+          <li><b>No company servers</b><span>The company runs no servers that hold your data.</span></li>
+          <li><b>Your own AI accounts</b><span>Vivary’s coding runs through Claude Code or Codex, under your own sign-in. Vivary includes no model access.</span></li>
+          <li><b>No analytics</b><span>This site sets no cookies, loads nothing from third parties, and keeps no analytics.</span></li>
+          <li><b>Open source</b><span>Callout and Vivary are both MIT licensed.</span></li>
+        </ul>
+        <p class="more"><a href={link('500')}><b>Read page 500</b></a></p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section band-ink on-ink" id="p600" aria-labelledby="contact-h">
+    <div class="wrap">
+      <div>
+        <div class="sechead"><span class="tag">600</span><h2 id="contact-h">Contact</h2></div>
+        <p>One person answers this. Expect a reply within a few days. For a vulnerability, email with “security” in the subject. Don’t open a public issue.</p>
+      </div>
+      <a class="mail" href="mailto:jeff@littleaicompany.com">jeff@littleaicompany.com</a>
+    </div>
+  </section>
+</Base>

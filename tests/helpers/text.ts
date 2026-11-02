@@ -65,15 +65,6 @@ export function visibleText(root: HTMLElement): string {
   return textBlocks(root).join(' ');
 }
 
-/** `alt` text of images under `root` that are not hidden, in document order. Empty alts are skipped. */
-export function altTexts(root: HTMLElement): string[] {
-  return root
-    .querySelectorAll('img')
-    .filter((img) => !img.closest('[hidden]'))
-    .map((img) => collapse(img.getAttribute('alt') ?? ''))
-    .filter(Boolean);
-}
-
 /** The text of one element, the way a visitor reads it. Quotes and apostrophes are compared as they are typed: curly. */
 export function textOf(el: HTMLElement): string {
   return visibleText(el);

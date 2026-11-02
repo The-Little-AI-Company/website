@@ -1,0 +1,57 @@
+---
+import Base from '../layouts/Base.astro';
+import type { Variant } from '../data/pages';
+
+interface Props {
+  variant: Variant;
+}
+const { variant } = Astro.props;
+---
+
+<Base
+  title="About"
+  description="The Little AI Company is my independent software studio. I build small tools for people who use AI and intend to stay in charge of it."
+  variant={variant}
+  current="500"
+>
+  <section class="ihero solo" aria-labelledby="hero-h">
+    <div class="wrap">
+      <div class="hero-text">
+        <p class="kicker"><span class="tag">500</span></p>
+        <h1 class="display" id="hero-h">About</h1>
+        <p class="lede">The Little AI Company is my independent software studio. I’m Jeff Kazzee, and I build small tools for people who use AI and intend to stay in charge of it.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section tight-top" aria-labelledby="position-h">
+    <div class="wrap split">
+      <div class="sechead">
+        <span class="tag">500</span>
+        <h2 id="position-h">The position</h2>
+      </div>
+      <div class="body">
+        <p class="lede">Most AI products are built to take work off your hands. Some of that is useful. Past a point it takes your judgment with it. You end up trusting output you can’t inspect, from a system you can’t stop.</p>
+        <p>I build the other kind. A tool of mine shows where a claim came from. It keeps its state in files you can open. It waits for your approval before it changes anything that matters. It should leave you sharper than it found you.</p>
+        <p>That’s the whole company. Callout and Vivary are open source, and both run on machines you control.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section flush-top" aria-labelledby="dont-h">
+    <div class="wrap split">
+      <div class="sechead">
+        <span class="tag">500</span>
+        <h2 id="dont-h">What I don’t do</h2>
+      </div>
+      <div class="body">
+        <ul class="terms">
+          <li><b>No hosted memory</b><p>I don’t keep your data on my servers. My tools don’t need one to run.</p></li>
+          <li><b>No telemetry</b><p>My tools don’t phone home, and neither does this site.</p></li>
+          <li><b>No autopilot</b><p>Nothing ships that acts on your behalf without a gate you can see.</p></li>
+          <li><b>No courses</b><p>My guides and workshops on second brains live on my own account at <a href="https://github.com/Jeff-Kazzee">github.com/Jeff-Kazzee</a>.</p></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+</Base>

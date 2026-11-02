@@ -3,6 +3,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse, type HTMLElement } from 'node-html-parser';
+import { NOT_FOUND, PAGE_TABLE, type LightId, type Variant } from './spec';
 
 /** Repository root, found from this file so the tests do not depend on the working directory. */
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -11,9 +12,8 @@ export const SRC = join(ROOT, 'src');
 export const PUBLIC = join(ROOT, 'public');
 
 export const SITE = 'https://littleaicompany.com';
-export const SITE_NAME = 'The Little AI Company';
 
-export type PageId = 'home' | 'callout' | 'vivary' | 'about' | 'contact' | 'not-found';
+export type PageId = LightId | `dark-${LightId}` | 'not-found';
 
 export interface PageInfo {
   id: PageId;
@@ -23,22 +23,54 @@ export interface PageInfo {
   url: string;
   /** File under dist/. */
   file: string;
-  /** The `<title>` the page must have. */
+  variant: Variant;
+  /** The `<title>` the page must have. A dark page has its light page's title. */
   title: string;
-  /** The link in the header that carries `aria-current="page"` (the brand link on the home page), or undefined for none. */
-  navHref?: string;
-  /** The canonical URL. The 404 page has none: it is not a page anyone should be sent to. */
+  h1: string;
+  /** Where the variant link goes: the same page in the other variant, or `/dark/` from the 404 page. */
+  twin: string;
+  /** The canonical URL, always of the light page. The 404 page has none: no one should be sent to it. */
   canonical?: string;
+  /** The light page whose content this page shows. The 404 page shows none. */
+  shows?: LightId;
 }
 
-export const PAGES: readonly PageInfo[] = [
-  { id: 'home', label: 'home', url: '/', file: 'index.html', title: SITE_NAME, navHref: '/', canonical: `${SITE}/` },
-  { id: 'callout', label: 'callout', url: '/callout/', file: 'callout/index.html', title: `Callout. ${SITE_NAME}`, navHref: '/callout/', canonical: `${SITE}/callout/` },
-  { id: 'vivary', label: 'vivary', url: '/vivary/', file: 'vivary/index.html', title: `Vivary. ${SITE_NAME}`, navHref: '/vivary/', canonical: `${SITE}/vivary/` },
-  { id: 'about', label: 'about', url: '/about/', file: 'about/index.html', title: `About. ${SITE_NAME}`, navHref: '/about/', canonical: `${SITE}/about/` },
-  { id: 'contact', label: 'contact', url: '/contact/', file: 'contact/index.html', title: `Contact. ${SITE_NAME}`, navHref: '/contact/', canonical: `${SITE}/contact/` },
-  { id: 'not-found', label: '404', url: '/404.html', file: '404.html', title: `Page not found. ${SITE_NAME}` },
-];
+const lightPages: PageInfo[] = PAGE_TABLE.map((p) => ({
+  id: p.id,
+  label: p.id,
+  url: p.path,
+  file: `${p.path.slice(1)}index.html`,
+  variant: 'light',
+  title: p.title,
+  h1: p.h1,
+  twin: `/dark${p.path}`,
+  canonical: `${SITE}${p.path}`,
+  shows: p.id,
+}));
+
+const darkPages: PageInfo[] = PAGE_TABLE.map((p, i) => ({
+  ...lightPages[i]!,
+  id: `dark-${p.id}`,
+  label: `dark ${p.id}`,
+  url: `/dark${p.path}`,
+  file: `dark/${p.path.slice(1)}index.html`,
+  variant: 'dark',
+  twin: p.path,
+}));
+
+const notFound: PageInfo = {
+  id: 'not-found',
+  label: '404',
+  url: '/404.html',
+  file: '404.html',
+  variant: 'light',
+  title: NOT_FOUND.title,
+  h1: NOT_FOUND.h1,
+  twin: '/dark/',
+};
+
+/** Every built page: the five light pages, their five dark twins, and the 404 page. */
+export const PAGES: readonly PageInfo[] = [...lightPages, ...darkPages, notFound];
 
 /** `[label, page]` tuples for `describe.each`, so test names read `home` rather than `'home'`. */
 export const PAGE_CASES: readonly (readonly [string, PageInfo])[] = PAGES.map((p) => [p.label, p] as const);
@@ -48,14 +80,6 @@ export const page = (id: PageId): PageInfo => {
   if (!found) throw new Error(`unknown page ${id}`);
   return found;
 };
-
-/** Main navigation, in the order the header shows it. */
-export const NAV_LINKS = [
-  { label: 'Callout', href: '/callout/' },
-  { label: 'Vivary', href: '/vivary/' },
-  { label: 'About', href: '/about/' },
-  { label: 'Contact', href: '/contact/' },
-] as const;
 
 export function distPath(file: string): string {
   return join(DIST, file);
@@ -79,7 +103,7 @@ export function parsePage(info: PageInfo): HTMLElement {
   return root;
 }
 
-export function parseHtml(html: string): HTMLElement {
+function parseHtml(html: string): HTMLElement {
   return parse(html, { comment: false });
 }
 
@@ -98,7 +122,7 @@ export function listFiles(dir: string): string[] {
   return out.sort();
 }
 
-export const sha256 = (data: Buffer | string): string => createHash('sha256').update(data).digest('hex');
+const sha256 = (data: string): string => createHash('sha256').update(data).digest('hex');
 
 // ---------------------------------------------------------------------------
 // Stylesheets
@@ -128,7 +152,7 @@ export function pageStylesheets(info: PageInfo): Stylesheet[] {
 
 /**
  * Every distinct stylesheet the site ships: all of dist/**\/*.css plus the inline
- * `<style>` blocks of every page, de-duplicated by content so a shared rule set that is
+ * `<style>` blocks of every page, de-duplicated by content so a block that is
  * inlined into several pages is read once.
  */
 export function siteStylesheets(): Stylesheet[] {
@@ -143,15 +167,9 @@ export function siteStylesheets(): Stylesheet[] {
   for (const file of listFiles(DIST).filter((f) => f.endsWith('.css'))) {
     add({ source: file, css: readFileSync(distPath(file), 'utf-8') });
   }
-  for (const info of PAGES) {
-    if (!existsSync(distPath(info.file))) continue;
-    for (const sheet of pageStylesheets(info)) add(sheet);
-  }
+  for (const info of PAGES) for (const sheet of pageStylesheets(info)) add(sheet);
   return sheets;
 }
-
-/** All of the site's CSS as one string. */
-export const siteCss = (): string => siteStylesheets().map((s) => s.css).join('\n');
 
 // ---------------------------------------------------------------------------
 // Links

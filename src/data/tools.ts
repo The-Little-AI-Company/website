@@ -1,4 +1,3 @@
-import type { Tone } from './status';
 import type { Term } from './types';
 
 /** Where a tool's latest release is published. */
@@ -12,11 +11,9 @@ export interface VersionSpec {
 export interface Tool {
   slug: 'callout' | 'vivary';
   name: string;
-  tagline: string;
   summary: string;
-  // The recorded state: the word on its badge and the dot beside it.
+  // The recorded state, as its status label shows it.
   status: string;
-  tone: Tone;
   // Absent when the tool has no public release to stamp.
   version?: VersionSpec;
   // A prerelease GitHub does not report as latest: its tag, its page and the day it came out, for the
@@ -31,18 +28,15 @@ export interface Tool {
 export const callout = {
   slug: 'callout',
   name: 'Callout',
-  tagline: 'Press a key. Get the receipts.',
   summary:
     'Press a hotkey over anything you are reading. A small popover tells you whether the text is trying to manipulate you, and whether its claims hold up against sources it fetched.',
   status: 'Released',
-  tone: 'shipped',
   version: { repo: 'The-Little-AI-Company/callout', fallback: 'v0.2.0' },
   primary: { label: 'Download for Windows', href: 'https://github.com/The-Little-AI-Company/callout/releases/latest/download/Callout-Setup.exe' },
   repo: 'https://github.com/The-Little-AI-Company/callout',
 } satisfies Tool;
 
-// The one place Vivary's current release is written. The status below, the home page's now line and Vivary
-// section, and the Vivary page all read it.
+// The one place Vivary's current release is written. The home page's news tag and the Vivary page read it.
 const prerelease = {
   tag: 'v0.1.0-beta.1',
   href: 'https://github.com/vivary-dev/vivary/releases/tag/v0.1.0-beta.1',
@@ -52,11 +46,9 @@ const prerelease = {
 export const vivary = {
   slug: 'vivary',
   name: 'Vivary',
-  tagline: 'Your projects. Your agents. Your machine.',
   summary:
     'A desktop workspace for working with AI agents on your own projects. Agent chat, project files, tools, and memory in one app. It runs on your Windows computer and needs no Vivary account.',
-  status: `Beta · ${prerelease.tag} · ${prerelease.date}`,
-  tone: 'wip',
+  status: 'Beta',
   prerelease,
   primary: { label: `Download ${prerelease.tag.slice(1)}`, href: prerelease.href },
   repo: 'https://github.com/vivary-dev/vivary',
@@ -120,9 +112,4 @@ async function fetchLatestVersion({ repo, fallback }: VersionSpec): Promise<stri
   } catch (error) {
     return fallBack(`the release lookup failed (${error instanceof Error ? error.message : String(error)})`);
   }
-}
-
-/** The text of a tool's status badge: its recorded status, with the latest release when it has one. */
-export async function stampedStatus(tool: Tool): Promise<string> {
-  return tool.version ? `${tool.status} · ${await latestVersion(tool.version)}` : tool.status;
 }

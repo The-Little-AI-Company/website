@@ -1,5 +1,0 @@
-// The skull bunny mark, drawn by Mark.astro and, through scripts/lib.mjs, by scripts/og.mjs and scripts/icons.mjs:
-// its viewBox, its fill rule and its path. The path has holes for the eyes and the nose, which only evenodd leaves open.
-export const markViewBox = '0 0 256 256';
-export const markFillRule = 'evenodd';
-export const markPath = 'M 64 100 L 64 42 A 20 20 0 0 1 104 42 L 104 96 Q 128 106 152 96 L 152 42 A 20 20 0 0 1 192 42 L 192 100 C 210 112 220 130 218 150 L 216 172 L 194 188 L 178 212 L 152 214 L 152 239 A 5 5 0 0 1 147 244 L 135 244 A 5 5 0 0 1 130 239 L 130 214 L 126 214 L 126 239 A 5 5 0 0 1 121 244 L 109 244 A 5 5 0 0 1 104 239 L 104 214 L 78 212 L 62 188 L 40 172 L 38 150 C 36 130 46 112 64 100 Z M 72 146 a 24 24 0 1 0 48 0 a 24 24 0 1 0 -48 0 Z M 136 146 a 24 24 0 1 0 48 0 a 24 24 0 1 0 -48 0 Z M 128 168 L 140 194 Q 128 200 116 194 Z';
