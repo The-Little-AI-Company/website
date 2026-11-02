@@ -124,11 +124,11 @@ export const CALLOUT_PLATE = {
 
 export const HOME = {
   title: SITE_NAME,
-  description: 'I’m Jeff Kazzee. I build Callout, which checks what you read, and Vivary, a desktop workspace for AI agents. Both keep you in charge.',
-  now: 'Now building Vivary. A Windows preview came out Sept 22, 2026.',
+  description: 'The Little AI Company makes Callout, which checks what you read, and Vivary, a desktop workspace for AI agents. Both keep you in charge.',
+  now: 'Vivary 0.1.0-beta.1 is out for Windows. Published Nov 1, 2026.',
   h1: 'Tools for the work you keep doing by hand.',
   lede:
-    'I’m Jeff Kazzee. I build Callout, a hotkey that checks what you read, and Vivary, a desktop workspace for AI agents. Small tools that keep you in charge of the AI you use.',
+    'The Little AI Company makes Callout, a hotkey that checks what you read, and Vivary, a desktop workspace for AI agents. Small tools that keep you in charge of the AI you use.',
   buttons: [
     { label: 'Get Callout', href: '/callout/#get-it', variant: 'primary' },
     { label: 'See Vivary', href: '/vivary/', variant: 'secondary' },
@@ -145,13 +145,14 @@ export const HOME = {
     plate: {
       ...IMAGES.workspace,
       alt: 'The Vivary window: a project list and conversations in a sidebar, an empty chat headed “What are we working on?”, and a notice asking you to sign in to Claude Code.',
-      caption: 'Development build, Oct 3, 2026, before Claude Code sign-in.',
+      caption: 'Development build, Oct 3, 2026, a month before beta.1.',
       small: IMAGE_VARIANTS.workspace,
     },
     body:
-      'A desktop workspace for working with AI agents on your own projects. Conversations sit beside your notes, research, drafts, and code. You bring your own Claude Code or Codex account, and the files stay where you run them.',
+      'A desktop workspace for working with AI agents on your own projects. Agent chat, project files, tools, and memory sit in one Windows app. For coding conversations it uses Claude Code or Codex, installed and signed in on the same computer. Vivary has no account of its own and includes no model access. Release notes and download.',
+    bodyLink: { label: 'Release notes and download', href: 'https://github.com/vivary-dev/vivary/releases/tag/v0.1.0-beta.1' },
     tone: 'wip',
-    status: 'Unsigned Windows preview · Sept 22, 2026',
+    status: 'Beta · v0.1.0-beta.1 · Nov 1, 2026',
     button: { label: 'More about Vivary', href: '/vivary/' },
   },
   callout: {
@@ -162,16 +163,16 @@ export const HOME = {
     button: { label: 'More about Callout', href: '/callout/' },
   },
   other: {
-    heading: 'Other things I have made',
+    heading: 'Other projects',
     maxWidth: 940,
   },
   how: {
-    heading: 'How I work',
+    heading: 'How the tools work',
     text: 'Memory in files you can open. Claims with the sources behind them. Nothing runs that you can’t see, stop, or undo.',
     lanes: [
       { term: 'You decide', detail: 'The tool proposes and you approve. A human gate is a feature, not a speed bump.' },
       { term: 'You can read everything', detail: 'State is plain files on a machine you control, not a hosted store you cannot open.' },
-      { term: 'You keep learning', detail: 'A tool that thinks for you leaves you weaker. My tools show their work so you get sharper.' },
+      { term: 'You keep learning', detail: 'A tool that thinks for you leaves you weaker. These tools show their work so you get sharper.' },
       { term: 'Sources or silence', detail: 'Every claim carries where it came from. Unsure is a real answer.' },
     ],
   },
@@ -328,13 +329,13 @@ export const CALLOUT_PAGE = {
 export const VIVARY_PAGE = {
   h1: 'Vivary',
   lede: 'Your projects. Your agents. Your machine.',
-  status: 'Unsigned Windows preview · Sept 22, 2026',
+  status: 'Beta · v0.1.0-beta.1 · Nov 1, 2026',
   buttons: [
-    { label: 'Visit vivaryagent.xyz', href: 'https://vivaryagent.xyz', variant: 'primary' },
+    { label: 'Download 0.1.0-beta.1', href: 'https://github.com/vivary-dev/vivary/releases/tag/v0.1.0-beta.1', variant: 'primary' },
     { label: 'Release queue on GitHub', href: 'https://github.com/vivary-dev/vivary/milestone/1', variant: 'secondary' },
   ],
   description:
-    'A desktop workspace for AI agents on your own projects. Agent chat, project files, tools, and memory in one app. Windows first. Files stay where you run them.',
+    'A desktop workspace for AI agents on your own projects. Agent chat, project files, tools, and memory in one app. Windows first. Beta 0.1.0-beta.1 is out.',
   plate: {
     ...IMAGES.vivarySite,
     alt: 'The vivaryagent.xyz home page: the headline “Your projects. Your AI agents.”, a Windows preview download button, and the felt antlered mascot holding a book.',
@@ -345,20 +346,20 @@ export const VIVARY_PAGE = {
     {
       heading: 'What it is',
       paragraphs: [
-        'One app where you open a project, talk to an agent about it, and watch what the agent does to your files. The agents, your credentials, your files, and the conversation history stay on the machine that runs Vivary.',
+        'One app where you open a project, talk to an agent about it, and watch what the agent does to your files. Vivary runs on your computer. Claude Code or Codex does the coding work and must be installed and signed in on the same computer.',
       ],
       lanes: [
-        { term: 'Work on a project', detail: 'Open a project and work with an agent that can read files, edit them, and run tools. Every change lands in your own folder.' },
-        { term: 'Come back to it', detail: 'Return to a project’s conversations, search past sessions, and keep the memory worth keeping in files you can open.' },
+        { term: 'Work on a project', detail: 'Open an existing folder as a project, or create a new one. Chat with Claude Code or Codex in it. The agent can read files, change files, and run tools.' },
+        { term: 'Keep what matters', detail: 'Save project facts as readable files in the project, and search the project’s files.' },
+        { term: 'Check project health', detail: 'Run a project health check with the Python that ships inside the app.' },
         {
-          term: 'Use the harnesses you have',
+          term: 'Automate',
           detail:
-            'Supported coding harnesses you already installed, such as Claude Code, run inside the workspace with their own tools. Guidance for them lives in files in the project.',
+            'Set up automations that run on a schedule, on an event, or from a webhook while Vivary is open. Provider-backed automations are not yet tested on the installed app.',
         },
-        { term: 'See what you’re building', detail: 'Preview the site or dashboard the agent is working on, and let the agent inspect and debug it.' },
         {
-          term: 'Reach it from your phone',
-          detail: 'Run it on your computer or on a server of your own. Connect a phone browser only when you turn on remote access.',
+          term: 'Self-host later',
+          detail: 'Vivary is built to be self-hosted. Remote access from another device is not yet tested on the installed app, so beta.1 is a desktop release.',
         },
       ],
     },
@@ -366,8 +367,8 @@ export const VIVARY_PAGE = {
       heading: 'What it asks of you',
       paragraphs: [],
       lanes: [
-        { term: 'No Vivary account', detail: 'Local desktop use needs none. Your provider accounts are yours and separate.' },
-        { term: 'Remote access is opt-in', detail: 'Off until you set it up, and authenticated when it’s on.' },
+        { term: 'No Vivary account', detail: 'The desktop app needs none. Your Claude Code or Codex sign-in is yours and separate.' },
+        { term: 'Windows 10 or 11, 64-bit', detail: 'No administrator rights. The installer installs Vivary for your Windows account only.' },
         { term: 'Windows first', detail: 'The desktop app targets Windows. A Mac build is possible later work, not a promise.' },
       ],
     },
@@ -375,17 +376,20 @@ export const VIVARY_PAGE = {
   statusSection: {
     heading: 'Status',
     lede:
-      'In development. A Windows preview came out on Sept 22, 2026 as a pre-release: an unsigned portable ZIP, not a stable release. The release queue lists what is verified and what is still required, in the open. Open source under MIT.',
+      'Beta. Version 0.1.0-beta.1 was published on Nov 1, 2026 as a GitHub prerelease. It comes as an installer and as a portable ZIP, for Windows 10 and 11 (x64). Neither is code signed, so Windows can show “Windows protected your PC”. Select More info, then Run anyway. Each file has a checksum, and the release notes show how to check it. The release queue lists what is verified and what is still required, in the open. Open source under MIT.',
     // In the order they appear in the sentence.
     links: [
-      { label: 'pre-release', href: 'https://github.com/vivary-dev/vivary/releases' },
+      { label: 'GitHub prerelease', href: 'https://github.com/vivary-dev/vivary/releases/tag/v0.1.0-beta.1' },
       { label: 'release queue', href: 'https://github.com/vivary-dev/vivary/milestone/1' },
     ],
-    cli:
-      'The original Vivary command-line tools, which scaffold typed memory for agent workspaces, are preserved as @vivary/create on npm and create-vivary on PyPI. They are not the desktop app.',
-    cliLinks: [
-      { label: '@vivary/create', href: 'https://www.npmjs.com/package/@vivary/create' },
-      { label: 'create-vivary', href: 'https://pypi.org/project/create-vivary/' },
+    limits:
+      'Known limits: Vivary runs one coding conversation at a time on a computer. Provider-backed automations, remote access from another device, and an upgrade over an earlier install are not yet tested on the installed app. Rolling back to an earlier version after an upgrade is not supported, so back up your Vivary data before you upgrade. The release notes list the rest.',
+    limitsLinks: [{ label: 'release notes', href: 'https://github.com/vivary-dev/vivary/releases/tag/v0.1.0-beta.1' }],
+    bugs:
+      'Found a bug? Open an issue. Include the release tag, your Windows version, the steps, and the error text. Do not attach credentials or private conversations. More about the project is at vivaryagent.xyz.',
+    bugsLinks: [
+      { label: 'Open an issue', href: 'https://github.com/vivary-dev/vivary/issues/new' },
+      { label: 'vivaryagent.xyz', href: 'https://vivaryagent.xyz' },
     ],
   },
 } as const;
@@ -414,7 +418,7 @@ export const ABOUT_PAGE = {
       { term: 'No autopilot', detail: 'Nothing ships that acts on your behalf without a gate you can see.' },
       {
         term: 'No courses',
-        detail: 'My guides and workshops on second brains and Zo Computer live on my own account at github.com/Jeff-Kazzee.',
+        detail: 'My guides and workshops on second brains live on my own account at github.com/Jeff-Kazzee.',
       },
     ],
     link: { label: 'github.com/Jeff-Kazzee', href: 'https://github.com/Jeff-Kazzee' },
@@ -485,8 +489,9 @@ export const TOOLS_EXPECTED = {
     primary: { label: 'Download for Windows', href: CALLOUT_PAGE.buttons[0].href },
   },
   vivary: {
-    status: 'Unsigned Windows preview · Sept 22, 2026',
-    primary: { label: 'Visit vivaryagent.xyz', href: 'https://vivaryagent.xyz' },
+    status: 'Beta · v0.1.0-beta.1 · Nov 1, 2026',
+    primary: { label: 'Download 0.1.0-beta.1', href: 'https://github.com/vivary-dev/vivary/releases/tag/v0.1.0-beta.1' },
+    prerelease: { tag: 'v0.1.0-beta.1', href: 'https://github.com/vivary-dev/vivary/releases/tag/v0.1.0-beta.1', date: 'Nov 1, 2026' },
     repo: 'https://github.com/vivary-dev/vivary',
     queue: 'https://github.com/vivary-dev/vivary/milestone/1',
   },
@@ -496,15 +501,19 @@ export const TOOLS_EXPECTED = {
 // Voice
 
 /** All-caps words that are allowed in visible text. Roman numerals are allowed on top of these, see copy.ts. */
-export const CAPS_ALLOWLIST: ReadonlySet<string> = new Set(['AI', 'MIT', 'API', 'APIs', 'LLM', 'HTML', 'CSS', 'CLI', 'V1', 'OS', 'ZIP']);
+// PC appears only inside Windows' own dialog title, which the Vivary page quotes.
+export const CAPS_ALLOWLIST: ReadonlySet<string> = new Set(['AI', 'MIT', 'API', 'APIs', 'LLM', 'HTML', 'CSS', 'CLI', 'V1', 'OS', 'ZIP', 'PC']);
 
 export const BANNED_WORDS = ['unlock', 'empower', 'seamless', 'robust', 'revolutionary', 'game-changing', 'elevate'] as const;
 
-/** Names of products and offers the company no longer has. Case-sensitive, and none may appear anywhere in the HTML. */
-export const RETIRED_NAMES = ['Wazoo', 'Hoolio', 'Bellamente', 'HarnessMax', 'Agent Relay', 'Starter Kit', 'beta', 'Beta', 'Two tools'] as const;
+/**
+ * Names of products and offers the company no longer has. Case-sensitive, and none may appear anywhere in the HTML.
+ * "beta" left this list on Nov 1, 2026, when Vivary 0.1.0-beta.1 shipped and the site has to name it.
+ */
+export const RETIRED_NAMES = ['Wazoo', 'Hoolio', 'Bellamente', 'HarnessMax', 'Agent Relay', 'Starter Kit', 'Two tools'] as const;
 
 /** Dates the copy may contain. Anything else would be invented. */
-export const KNOWN_DATES = ['Sept 22, 2026', 'Oct 3, 2026', 'Oct 8, 2026'] as const;
+export const KNOWN_DATES = ['Oct 3, 2026', 'Oct 8, 2026', 'Nov 1, 2026'] as const;
 
 /** Redirects from astro.config.mjs that must keep working. */
 export const RETIRED_PAGES = ['services', 'club', 'start-here', 'projects', 'brand', 'pages'] as const;

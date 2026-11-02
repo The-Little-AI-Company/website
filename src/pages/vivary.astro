@@ -7,12 +7,12 @@ import SplitSection from '../components/SplitSection.astro';
 import ToolHero from '../components/ToolHero.astro';
 import { vivary } from '../data/tools';
 
-const releases = `${vivary.repo}/releases`;
+const { prerelease } = vivary;
 ---
 
 <Base
   title="Vivary"
-  description="A desktop workspace for AI agents on your own projects. Agent chat, project files, tools, and memory in one app. Windows first. Files stay where you run them."
+  description="A desktop workspace for AI agents on your own projects. Agent chat, project files, tools, and memory in one app. Windows first. Beta 0.1.0-beta.1 is out."
 >
   <ToolHero tool={vivary}>
     <Plate
@@ -30,30 +30,29 @@ const releases = `${vivary.repo}/releases`;
   <SplitSection heading="What it is">
     <p slot="intro" class="text">
       One app where you open a project, talk to an agent about it, and watch what
-      the agent does to your files. The agents, your credentials, your files, and
-      the conversation history stay on the machine that runs Vivary.
+      the agent does to your files. Vivary runs on your computer. Claude Code or
+      Codex does the coding work and must be installed and signed in on the same computer.
     </p>
     <Lanes>
       <Lane term="Work on a project">
-        Open a project and work with an agent that can read files, edit them, and run
-        tools. Every change lands in your own folder.
+        Open an existing folder as a project, or create a new one. Chat with Claude
+        Code or Codex in it. The agent can read files, change files, and run tools.
       </Lane>
-      <Lane term="Come back to it">
-        Return to a project’s conversations, search past sessions, and keep the
-        memory worth keeping in files you can open.
+      <Lane term="Keep what matters">
+        Save project facts as readable files in the project, and search the
+        project’s files.
       </Lane>
-      <Lane term="Use the harnesses you have">
-        Supported coding harnesses you already installed, such as Claude Code, run
-        inside the workspace with their own tools. Guidance for them lives in files
-        in the project.
+      <Lane term="Check project health">
+        Run a project health check with the Python that ships inside the app.
       </Lane>
-      <Lane term="See what you’re building">
-        Preview the site or dashboard the agent is working on, and let the agent
-        inspect and debug it.
+      <Lane term="Automate">
+        Set up automations that run on a schedule, on an event, or from a webhook
+        while Vivary is open. Provider-backed automations are not yet tested on the
+        installed app.
       </Lane>
-      <Lane term="Reach it from your phone">
-        Run it on your computer or on a server of your own. Connect a phone browser
-        only when you turn on remote access.
+      <Lane term="Self-host later">
+        Vivary is built to be self-hosted. Remote access from another device is not
+        yet tested on the installed app, so beta.1 is a desktop release.
       </Lane>
     </Lanes>
   </SplitSection>
@@ -61,9 +60,11 @@ const releases = `${vivary.repo}/releases`;
   <SplitSection heading="What it asks of you">
     <Lanes>
       <Lane term="No Vivary account">
-        Local desktop use needs none. Your provider accounts are yours and separate.
+        The desktop app needs none. Your Claude Code or Codex sign-in is yours and separate.
       </Lane>
-      <Lane term="Remote access is opt-in">Off until you set it up, and authenticated when it’s on.</Lane>
+      <Lane term="Windows 10 or 11, 64-bit">
+        No administrator rights. The installer installs Vivary for your Windows account only.
+      </Lane>
       <Lane term="Windows first">
         The desktop app targets Windows. A Mac build is possible later work, not a promise.
       </Lane>
@@ -72,20 +73,28 @@ const releases = `${vivary.repo}/releases`;
 
   <SplitSection heading="Status">
     <p class="lede">
-      In development. A Windows preview came out on {vivary.previewDate} as a <a class="nowrap" href={releases}>pre-release</a>:
-      an unsigned portable ZIP, not a stable release. The <a class="nowrap" href={vivary.queue}>release queue</a> lists
+      Beta. Version {prerelease.tag.slice(1)} was published on {prerelease.date} as a <a class="nowrap" href={prerelease.href}>GitHub prerelease</a>.
+      It comes as an installer and as a portable ZIP, for Windows 10 and 11 (x64). Neither is code signed, so
+      Windows can show “Windows protected your PC”. Select More info, then Run anyway. Each file has a checksum,
+      and the release notes show how to check it. The <a class="nowrap" href={vivary.queue}>release queue</a> lists
       what is verified and what is still required, in the open. Open source under MIT.
     </p>
-    <p class="text-sm original">
-      The original Vivary command-line tools, which scaffold typed memory for agent
-      workspaces, are preserved as <a href="https://www.npmjs.com/package/@vivary/create">@vivary/create</a> on npm and <a href="https://pypi.org/project/create-vivary/">create-vivary</a> on PyPI. They are not the desktop app.
+    <p class="text later">
+      Known limits: Vivary runs one coding conversation at a time on a computer. Provider-backed automations,
+      remote access from another device, and an upgrade over an earlier install are not yet tested on the
+      installed app. Rolling back to an earlier version after an upgrade is not supported, so back up your
+      Vivary data before you upgrade. The <a class="nowrap" href={prerelease.href}>release notes</a> list the rest.
+    </p>
+    <p class="text later">
+      Found a bug? <a class="nowrap" href={`${vivary.repo}/issues/new`}>Open an issue</a>. Include the release tag,
+      your Windows version, the steps, and the error text. Do not attach credentials or private conversations.
+      More about the project is at <a class="nowrap" href="https://vivaryagent.xyz">vivaryagent.xyz</a>.
     </p>
   </SplitSection>
 </Base>
 
 <style>
-  .original {
+  .later {
     margin-top: var(--space-5);
-    color: var(--ink-faint);
   }
 </style>

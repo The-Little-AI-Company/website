@@ -19,21 +19,21 @@ const calloutStatus = await stampedStatus(callout);
 const tenets: Term[] = [
   { term: 'You decide', detail: 'The tool proposes and you approve. A human gate is a feature, not a speed bump.' },
   { term: 'You can\u00a0read everything', detail: 'State is plain files on a machine you control, not a hosted store you cannot open.' },
-  { term: 'You keep learning', detail: 'A tool that thinks for you leaves you weaker. My tools show their work so you get sharper.' },
+  { term: 'You keep learning', detail: 'A tool that thinks for you leaves you weaker. These tools show their work so you get sharper.' },
   { term: 'Sources or silence', detail: 'Every claim carries where it came from. Unsure is a real answer.' },
 ];
 ---
 
 <Base
   title="The Little AI Company"
-  description="I’m Jeff Kazzee. I build Callout, which checks what you read, and Vivary, a desktop workspace for AI agents. Both keep you in charge."
+  description="The Little AI Company makes Callout, which checks what you read, and Vivary, a desktop workspace for AI agents. Both keep you in charge."
 >
   <section class="hero">
     <div class="wrap">
-      <NowLine tone="wip">Now building Vivary. A Windows preview came out {vivary.previewDate}.</NowLine>
+      <NowLine tone="wip">Vivary {vivary.prerelease.tag.slice(1)} is out for Windows. Published {vivary.prerelease.date}.</NowLine>
       <h1 class="display-xl">Tools for the work you keep doing by hand.</h1>
       <p class="lede">
-        I’m Jeff Kazzee. I build Callout, a hotkey that checks what you read, and Vivary, a desktop
+        The Little AI Company makes Callout, a hotkey that checks what you read, and Vivary, a desktop
         workspace for AI agents. Small tools that keep you in charge of the AI you use.
       </p>
       <div class="actions">
@@ -72,12 +72,13 @@ const tenets: Term[] = [
           height={844}
           alt="The Vivary window: a project list and conversations in a sidebar, an empty chat headed “What are we working on?”, and a notice asking you to sign in to Claude Code."
         >
-          <Fragment slot="caption">Development build, Oct 3, 2026, before Claude Code <span class="nowrap">sign-in</span>.</Fragment>
+          <Fragment slot="caption">Development build, Oct 3, 2026, a month before <span class="nowrap">beta.1</span>.</Fragment>
         </Plate>
         <p class="text">
-          A desktop workspace for working with AI agents on your own projects. Conversations sit beside your
-          notes, research, drafts, and code. You bring your own Claude Code or Codex account, and the files stay
-          where you run them.
+          A desktop workspace for working with AI agents on your own projects. Agent chat, project files, tools,
+          and memory sit in one Windows app. For coding conversations it uses Claude Code or Codex, installed and
+          signed in on the same computer. Vivary has no account of its own and includes no model
+          access. <a class="nowrap" href={vivary.prerelease.href}>Release notes and download</a>.
         </p>
       </ProjectFeature>
 
@@ -98,14 +99,14 @@ const tenets: Term[] = [
 
   <section id="other" class="section other">
     <div class="wrap">
-      <h2 class="heading">Other things I have made</h2>
+      <h2 class="heading">Other projects</h2>
       <ol class="contents">
         {projects.map((project) => <ProjectEntry {...project} />)}
       </ol>
     </div>
   </section>
 
-  <SplitSection id="how" heading="How I work">
+  <SplitSection id="how" heading="How the tools work">
     <p slot="intro" class="text how-intro">
       Memory in files you can open. Claims with the sources behind them. Nothing runs that you can’t see,
       stop, or undo.

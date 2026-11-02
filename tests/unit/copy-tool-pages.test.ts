@@ -128,7 +128,7 @@ describe('vivary: hero', () => {
     expect(textOf(paragraph(hero(), vivary.summary))).toBe(vivary.summary);
   });
 
-  it('has Visit vivaryagent.xyz (primary) and Release queue on GitHub (secondary)', () => {
+  it('has Download 0.1.0-beta.1 (primary, the release page) and Release queue on GitHub (secondary)', () => {
     expect(buttons(hero()).map((b) => ({ label: b.label, href: b.href, variant: b.variant }))).toEqual(
       VIVARY_PAGE.buttons.map((b) => ({ label: b.label, href: b.href, variant: b.variant })),
     );
@@ -172,22 +172,32 @@ describe('vivary: sections', () => {
     const section = () => sectionOf(one(vivaryDoc(), 'main'), VIVARY_PAGE.statusSection.heading);
     const s = VIVARY_PAGE.statusSection;
 
-    it('says what came out on Sept 22, 2026', () => {
+    it('says what came out on Nov 1, 2026', () => {
       expect(textOf(paragraph(section(), s.lede))).toBe(s.lede);
     });
 
-    it('links "pre-release" to the releases page and "release queue" to the milestone', () => {
+    it('links "GitHub prerelease" to the beta.1 release and "release queue" to the milestone', () => {
       expect(links(paragraph(section(), s.lede))).toEqual(s.links.map((l) => ({ label: l.label, href: l.href })));
     });
 
-    it('keeps the paragraph about the command-line tools, with its npm and PyPI links', () => {
-      const cli = paragraph(section(), s.cli);
-      expect(textOf(cli)).toBe(s.cli);
-      expect(links(cli)).toEqual(s.cliLinks.map((l) => ({ label: l.label, href: l.href })));
+    it('lists the known limits and links the release notes', () => {
+      const limits = paragraph(section(), s.limits);
+      expect(textOf(limits)).toBe(s.limits);
+      expect(links(limits)).toEqual(s.limitsLinks.map((l) => ({ label: l.label, href: l.href })));
     });
 
-    it('runs the status lede, then the command-line note', () => {
-      expect(inOrder(vivaryDoc(), [paragraph(section(), s.lede), paragraph(section(), s.cli)])).toBe(true);
+    it('says how to report a bug, and links the issue form and vivaryagent.xyz', () => {
+      const bugs = paragraph(section(), s.bugs);
+      expect(textOf(bugs)).toBe(s.bugs);
+      expect(links(bugs)).toEqual(s.bugsLinks.map((l) => ({ label: l.label, href: l.href })));
+    });
+
+    it('links neither npm nor PyPI anywhere on the page, because the CLI is not the product', () => {
+      expect(all(vivaryDoc(), 'a[href]').map((a) => attr(a, 'href')).filter((h) => /npmjs\.com|pypi\.org/.test(h ?? ''))).toEqual([]);
+    });
+
+    it('runs the status lede, the limits, then the bug note', () => {
+      expect(inOrder(vivaryDoc(), [paragraph(section(), s.lede), paragraph(section(), s.limits), paragraph(section(), s.bugs)])).toBe(true);
     });
   });
 });
