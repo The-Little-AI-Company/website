@@ -1,36 +1,5 @@
 ---
-import Base from '../layouts/Base.astro';
-import Lane from '../components/Lane.astro';
-import Lanes from '../components/Lanes.astro';
-import PageHead from '../components/PageHead.astro';
-import SplitSection from '../components/SplitSection.astro';
-import { tools } from '../data/tools';
+import Contact from '../views/Contact.astro';
 ---
 
-<Base
-  title="Contact"
-  description="Reach me by email, or on GitHub, X, or Bluesky. Bug reports go to each tool’s issue tracker, and security reports go to my email."
->
-  <PageHead title="Contact" lede="One person answers this. That’s me. Expect a reply within a few days." />
-
-  <SplitSection heading="How to reach me">
-    <Lanes>
-      <Lane term="Email">
-        <a href="mailto:jeff@littleaicompany.com">jeff@littleaicompany.com</a>
-      </Lane>
-      <Lane term="Bugs">
-        Report a bug on GitHub: {tools.map((t, i) => (
-          <>
-            <a class="nowrap" href={`${t.repo}/issues`}>{t.name} issues</a>{i < tools.length - 1 ? ' or ' : '.'}
-          </>
-        ))}
-      </Lane>
-      <Lane term="Security">
-        Email me with “security” in the subject. Don’t open a public issue for a vulnerability.
-      </Lane>
-      <Lane term="Elsewhere">
-        <a href="https://github.com/The-Little-AI-Company">GitHub</a>, <a href="https://x.com/JeffKazzee">X</a>, and <a href="https://bsky.app/profile/jeffkazzee.bsky.social">Bluesky</a>.
-      </Lane>
-    </Lanes>
-  </SplitSection>
-</Base>
+<Contact variant="light" />

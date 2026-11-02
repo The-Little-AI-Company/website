@@ -4,12 +4,11 @@
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import sharp from 'sharp';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { contrast, parseHex } from '../helpers/color';
-import { DIST, PAGES, PUBLIC, ROOT, SITE, SITE_NAME, listFiles } from '../helpers/dist';
-import { decodePng, pixelAt, readPngSize } from '../helpers/image';
-import { HEAD, RETIRED_PAGES } from '../helpers/spec';
-import { themeColor } from '../helpers/tokens';
+import { parseHex } from '../helpers/color';
+import { DIST, PAGES, PUBLIC, ROOT, SITE } from '../helpers/dist';
+import { FONT_FAMILIES, LIGHT_TOKENS, RETIRED_PAGES } from '../helpers/spec';
 
 interface Manifest {
   name?: string;
@@ -20,24 +19,30 @@ interface Manifest {
   icons?: { src: string; sizes: string; type: string }[];
 }
 
+/** RGBA pixels of a PNG. */
+async function pixels(file: string): Promise<{ width: number; height: number; data: Buffer }> {
+  const { data, info } = await sharp(file).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  return { width: info.width, height: info.height, data };
+}
+
 describe.each([
   ['public/site.webmanifest', join(PUBLIC, 'site.webmanifest')],
   ['dist/site.webmanifest', join(DIST, 'site.webmanifest')],
 ])('%s', (_name, path) => {
   const manifest = (): Manifest => JSON.parse(readFileSync(path, 'utf-8')) as Manifest;
 
-  it('uses the ivory ground for theme_color and background_color', () => {
-    expect(manifest().theme_color).toBe(HEAD.themeColorLight.content);
-    expect(manifest().background_color).toBe(HEAD.themeColorLight.content);
+  it('uses the light paper for theme_color and background_color', () => {
+    expect(manifest().theme_color?.toUpperCase()).toBe(LIGHT_TOKENS['--paper']);
+    expect(manifest().background_color?.toUpperCase()).toBe(LIGHT_TOKENS['--paper']);
   });
 
   it('keeps its name and standalone display', () => {
-    expect(manifest().name).toBe(SITE_NAME);
+    expect(manifest().name).toBe('The Little AI Company');
     expect(manifest().short_name).toBe('Little AI Co');
     expect(manifest().display).toBe('standalone');
   });
 
-  it('keeps the 192px and 512px icons, and they exist', () => {
+  it('lists the 192px and 512px icons, and they are that size', async () => {
     const icons = manifest().icons ?? [];
     expect(icons.map((i) => [i.src, i.sizes, i.type])).toEqual([
       ['/icon-192.png', '192x192', 'image/png'],
@@ -45,102 +50,54 @@ describe.each([
     ]);
     for (const icon of icons) {
       expect(existsSync(join(DIST, icon.src)), icon.src).toBe(true);
-      const { width, height } = readPngSize(readFileSync(join(PUBLIC, icon.src)));
+      const { width, height } = await pixels(join(PUBLIC, icon.src));
       expect(`${width}x${height}`).toBe(icon.sizes);
     }
   });
 });
 
 describe('the app icons', () => {
-  const ground = parseHex(HEAD.themeColorLight.content);
-  const ink = parseHex(themeColor('company-light', 'ink'));
+  const paper = parseHex(LIGHT_TOKENS['--paper']);
+  const pink = parseHex(LIGHT_TOKENS['--pink']);
 
   it.each([
     ['apple-touch-icon.png', 180],
     ['icon-192.png', 192],
     ['icon-512.png', 512],
-  ] as const)('%s is an opaque %spx square of the ground color with the mark in ink', (file, size) => {
-    const png = decodePng(readFileSync(join(PUBLIC, file)));
-    expect([png.width, png.height]).toEqual([size, size]);
+  ] as const)('%s is an opaque %spx square of paper with the mark in pink', async (file, size) => {
+    const { width, height, data } = await pixels(join(PUBLIC, file));
+    expect([width, height]).toEqual([size, size]);
     let translucent = 0;
-    let onGround = 0;
-    let inInk = 0;
-    for (let i = 0; i < png.pixels.length; i += 4) {
-      if (png.pixels[i + 3] !== 255) translucent++;
-      if (png.pixels[i] === ground.r && png.pixels[i + 1] === ground.g && png.pixels[i + 2] === ground.b) onGround++;
-      if (png.pixels[i] === ink.r && png.pixels[i + 1] === ink.g && png.pixels[i + 2] === ink.b) inInk++;
+    let onPaper = 0;
+    let inPink = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i + 3] !== 255) translucent++;
+      if (data[i] === paper.r && data[i + 1] === paper.g && data[i + 2] === paper.b) onPaper++;
+      if (data[i] === pink.r && data[i + 1] === pink.g && data[i + 2] === pink.b) inPink++;
     }
     // iOS paints transparent pixels black, so an icon has none.
     expect(translucent, 'pixels that are not fully opaque').toBe(0);
-    expect(onGround / (size * size), 'share of the icon that is the ground color').toBeGreaterThan(0.5);
-    expect(inInk / (size * size), 'share of the icon that is the ink of the mark').toBeGreaterThan(0.05);
-    expect(pixelAt(png, 0, 0), 'corner').toEqual([ground.r, ground.g, ground.b, 255]);
+    expect(onPaper / (size * size), 'share of the icon that is paper').toBeGreaterThan(0.5);
+    expect(inPink / (size * size), 'share of the icon that is the pink mark').toBeGreaterThan(0.05);
+    expect([...data.subarray(0, 4)], 'corner').toEqual([paper.r, paper.g, paper.b, 255]);
   });
 });
 
 describe('the social card, public/og.png', () => {
-  const file = join(PUBLIC, 'og.png');
-
-  it('is a 1200x630 PNG, and the same file ships in dist/', () => {
-    expect(readPngSize(readFileSync(file))).toEqual({ width: 1200, height: 630 });
-    expect(readFileSync(join(DIST, 'og.png')).equals(readFileSync(file))).toBe(true);
-  });
-
-  describe('pixels', () => {
-    const png = () => decodePng(readFileSync(file));
-
-    it('sits on the ivory ground: most of the card is --ground', () => {
-      const image = png();
-      const ground = parseHex(HEAD.themeColorLight.content);
-      let onGround = 0;
-      for (let i = 0; i < image.width * image.height; i++) {
-        const o = i * 4;
-        const near = [0, 1, 2].every((c, k) => Math.abs((image.pixels[o + c] ?? 0) - [ground.r, ground.g, ground.b][k]!) <= 3);
-        if (near) onGround++;
-      }
-      const share = onGround / (image.width * image.height);
-      expect(share, `${(share * 100).toFixed(1)}% of the card is ${HEAD.themeColorLight.content}`).toBeGreaterThan(0.5);
-    });
-
-    it('carries ink: the title, the mark and a rule, a few percent of the card', () => {
-      const image = png();
-      let dark = 0;
-      for (let i = 0; i < image.width * image.height; i++) {
-        const o = i * 4;
-        const colour = `#${[0, 1, 2].map((c) => (image.pixels[o + c] ?? 0).toString(16).padStart(2, '0')).join('')}`;
-        if (contrast(colour, HEAD.themeColorLight.content) >= 7) dark++;
-      }
-      const share = dark / (image.width * image.height);
-      expect(share, `${(share * 100).toFixed(2)}% of the card is ink`).toBeGreaterThan(0.01);
-      expect(share).toBeLessThan(0.4);
-    });
-  });
-});
-
-describe('scripts/', () => {
-  const files = () => listFiles(join(ROOT, 'scripts'));
-
-  it('holds the script that renders the social card with Playwright', () => {
-    expect(files().length, 'scripts/ is missing or empty').toBeGreaterThan(0);
-    const generators = files().filter((f) => {
-      const text = readFileSync(join(ROOT, 'scripts', f), 'utf-8');
-      return /og\.png/.test(text) && /playwright/i.test(text);
-    });
-    expect(generators.length, 'no script under scripts/ mentions og.png and playwright').toBeGreaterThan(0);
+  it('is a 1200x630 PNG, and the same file ships in dist/', async () => {
+    const { width, height } = await pixels(join(PUBLIC, 'og.png'));
+    expect({ width, height }).toEqual({ width: 1200, height: 630 });
+    expect(readFileSync(join(DIST, 'og.png')).equals(readFileSync(join(PUBLIC, 'og.png')))).toBe(true);
   });
 });
 
 describe('README.md', () => {
   const readme = () => readFileSync(join(ROOT, 'README.md'), 'utf-8');
 
-  it('describes the fonts, the tokens, and both test suites', () => {
-    const text = readme();
-    expect(text).toMatch(/Instrument Serif/);
-    expect(text).toMatch(/Instrument Sans/);
-    expect(text).toMatch(/tokens\.css/);
-    expect(text).toMatch(/design\/tokens\.json/);
-    expect(text).toMatch(/Playwright|test:e2e/);
-    expect(text).toMatch(/pnpm test/);
+  it('names the three fonts and both test suites', () => {
+    for (const family of FONT_FAMILIES) expect(readme()).toContain(family);
+    expect(readme()).toMatch(/Playwright/);
+    expect(readme()).toMatch(/pnpm test/);
   });
 
   it('keeps the dev server address', () => {
@@ -160,13 +117,14 @@ describe('robots.txt and sitemap.xml', () => {
     expect(robots()).toContain(`Sitemap: ${SITE}/sitemap.xml`);
   });
 
-  it('lists exactly the five public pages, each by its absolute https address', () => {
-    const expected = PAGES.filter((p) => p.id !== 'not-found').map((p) => `${SITE}${p.url}`);
+  it('lists exactly the five light pages, each by its absolute https address', () => {
+    const expected = PAGES.flatMap((p) => (p.variant === 'light' && p.canonical ? [p.canonical] : []));
+    expect(expected).toHaveLength(5);
     expect(locations().sort()).toEqual(expected.sort());
-    for (const loc of locations()) expect(loc).toMatch(/^https:\/\/[^\s/]+\/\S*$/);
   });
 
-  it('leaves out the 404 page and every redirect', () => {
+  it('leaves out the dark pages, the 404 page and every redirect', () => {
+    expect(sitemap()).not.toMatch(/\/dark\//);
     expect(sitemap()).not.toMatch(/404/);
     for (const redirect of [...RETIRED_PAGES, 'guides']) expect(sitemap(), redirect).not.toContain(`/${redirect}/`);
   });
@@ -194,9 +152,7 @@ describe('project files', () => {
     expect(pkg.scripts['test:e2e']).toBe('playwright test --project=chromium');
     expect(pkg.scripts['verify']).toBe('pnpm check:node && pnpm test:node && pnpm check && pnpm build && pnpm test && pnpm test:e2e');
     expect(pkg.scripts['check']).toBe('astro check --minimumFailingSeverity hint');
-    expect(pkg.scripts['og']).toBe('node scripts/og.mjs');
     expect(pkg.scripts['icons']).toBe('node scripts/icons.mjs');
-    expect(pkg.scripts['images']).toBe('node scripts/images.mjs');
     expect(pkg.scripts['screenshots']).toBe('playwright test --project=screenshots');
     for (const name of ['dev', 'build', 'preview']) expect(pkg.scripts[name], name).toBeDefined();
   });

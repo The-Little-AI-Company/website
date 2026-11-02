@@ -1,0 +1,46 @@
+---
+import Base from '../layouts/Base.astro';
+import type { Variant } from '../data/pages';
+import { tools } from '../data/tools';
+
+interface Props {
+  variant: Variant;
+}
+const { variant } = Astro.props;
+---
+
+<Base
+  title="Contact"
+  description="Reach me by email, or on GitHub, X, or Bluesky. Bug reports go to each tool’s issue tracker, and security reports go to my email."
+  variant={variant}
+  current="600"
+>
+  <section class="ihero solo" aria-labelledby="hero-h">
+    <div class="wrap">
+      <div class="hero-text">
+        <p class="kicker"><span class="tag">600</span></p>
+        <h1 class="display" id="hero-h">Contact</h1>
+        <p class="lede">One person answers this. That’s me. Expect a reply within a few days.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section tight-top" aria-labelledby="reach-h">
+    <div class="wrap split">
+      <div class="sechead">
+        <span class="tag">600</span>
+        <h2 id="reach-h">How to reach me</h2>
+      </div>
+      <div class="body">
+        <ul class="terms">
+          <li><b>Email</b><p class="more"><a href="mailto:jeff@littleaicompany.com">jeff@littleaicompany.com</a></p></li>
+          <li><b>Bugs</b><p>Report a bug on GitHub: {tools.map((t, i) => (
+            <><a href={`${t.repo}/issues`}>{t.name} issues</a>{i < tools.length - 1 ? ' or ' : '.'}</>
+          ))}</p></li>
+          <li><b>Security</b><p>Email me with “security” in the subject. Don’t open a public issue for a vulnerability.</p></li>
+          <li><b>Elsewhere</b><p><a href="https://github.com/The-Little-AI-Company">GitHub</a>, <a href="https://x.com/JeffKazzee">X</a>, and <a href="https://bsky.app/profile/jeffkazzee.bsky.social">Bluesky</a>.</p></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+</Base>
