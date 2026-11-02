@@ -63,12 +63,16 @@ status=done
 printf 'site %s\nstarted %s\nepoch %s\n' "$site" "$(date -u +%FT%TZ)" "$(date -u +%s)" > "$out/meta.txt"
 : > "$out/pages.tsv"
 : > "$out/urls.tsv"
+# The dark routes are the key's Dark pages table. checks.mjs fails any key route missing here.
 for pair in home=/ callout=/callout/ vivary=/vivary/ about=/about/ contact=/contact/ \
-            notfound=/does-not-exist/ robots=/robots.txt sitemap=/sitemap.xml; do
+            notfound=/does-not-exist/ robots=/robots.txt sitemap=/sitemap.xml \
+            dark-home=/dark/ dark-callout=/dark/callout/ dark-vivary=/dark/vivary/ \
+            dark-about=/dark/about/ dark-contact=/dark/contact/; do
   name=${pair%%=*} path=${pair#*=}
   code=$(fetch "$site$path" "$out/pages/$name")
   printf '%s\t%s\t%s\n' "$name" "$path" "$code" >> "$out/pages.tsv"
-  case $code in 200 | 404) ;; *) status=fail ;; esac
+  # A dark route that is missing is a finding for the target rows, not a failed collection.
+  case $name:$code in dark-*:*) ;; *:200 | *:404) ;; *) status=fail ;; esac
   case $name in robots | sitemap) continue ;; esac
   refs "$out/pages/$name" | while IFS= read -r ref; do
     abs=$(resolve "$site$path" "$ref"); [ -n "$abs" ] && printf '%s\t%s\n' "$abs" "$path" >> "$out/urls.tsv"
@@ -86,7 +90,10 @@ own_get() { # own_get URL FILE: body to FILE, prints the status, records a Set-C
   rm -f "$hdr"
   echo "${code:-000}"
 }
-check_own() { # check_own URL: status of a same-origin URL. Stylesheets and manifests are kept and read too.
+# check_own URL: status of a same-origin URL. Stylesheets and manifests are kept and read too.
+# Every other asset that answers 200 is kept, so the replay can serve fonts and images to the
+# browser rows. Pages (a path ending in /) are served from pages/ instead.
+check_own() {
   local url=$1 rel=${1#"$site"} file
   rel=${rel%%\?*}; [ -z "$rel" ] && rel=/
   case $rel in
@@ -108,8 +115,13 @@ check_own() { # check_own URL: status of a same-origin URL. Stylesheets and mani
         while IFS= read -r ref; do
           abs=$(resolve "$url" "$ref"); [ -n "$abs" ] && printf '%s\t%s\n' "$abs" "$rel" >> "$out/urls.tsv"
         done ;;
-    *)
+    */)
       code=$(own_get "$url" /dev/null)
+      printf '%s\t%s\n' "${code:-000}" "$url" >> "$out/same-origin.tsv" ;;
+    *)
+      file="$out/files$rel"; mkdir -p "$(dirname "$file")"
+      code=$(own_get "$url" "$file")
+      [ "$code" = 200 ] || rm -f "$file"
       printf '%s\t%s\n' "${code:-000}" "$url" >> "$out/same-origin.tsv" ;;
   esac
 }

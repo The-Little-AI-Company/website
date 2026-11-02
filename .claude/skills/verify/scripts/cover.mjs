@@ -7,9 +7,10 @@ import { join } from 'node:path';
 
 const [keyFile, evidence] = process.argv.slice(2);
 const key = JSON.parse(readFileSync(keyFile, 'utf8'));
-// The repo rows run once, on the checkout. T23 compares the build with production, so it has
-// only a build result. Every other row is judged on the build and on production.
-const BUILD_ONLY = new Set(['T10', 'T14', 'T23']);
+// The repo rows run once, on the checkout. Every other row is judged on the build and on
+// production. T31 is not build only: its workflow part is a repo check that checks.mjs adds to
+// the build result, and its page part runs on both sides.
+const BUILD_ONLY = new Set(['T10', 'T14']);
 const results = [];
 const repo = join(evidence, 'repo.txt');
 if (existsSync(repo)) {

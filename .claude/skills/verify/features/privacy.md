@@ -35,7 +35,11 @@ Load any page. Nothing outside littleaicompany.com is contacted, and the footer 
 
 ## Gotchas
 
-- The live replay serves production's pages and stylesheets only. Fonts and images answer 404
-  there. T9 reads which origins Chrome asked for, not whether they answered, and T5 checks
-  production's statuses from the snapshot.
+- The live replay serves production's pages, and every same-origin asset that `live.sh` saw
+  answer 200 (stylesheets, fonts, images, icons). Anything else answers 404 there. T9 reads
+  which origins Chrome asked for, not whether they answered, and T5 checks production's
+  statuses from the snapshot.
+- T7 to T11 judge the light pages and the 404 page. T24 runs the same predicates over the dark
+  pages. T8 is the exception: a `Set-Cookie` on any response either side fetched fails T8,
+  dark pages included, because a cookie anywhere breaks the footer promise.
 - Never edit `tests/unit/third-party.test.ts` to make a branch pass. T10 fails on any byte.

@@ -16,10 +16,10 @@ The skill runs on two hosts, because each can reach something the other cannot:
 | Live snapshot, `scripts/live.sh` | Any host that reaches `https://littleaicompany.com` (bash, curl, grep only) | The build sandbox's network resets TLS to GitHub Pages and npmjs.com (Daytona, 2026-11-01) |
 | Everything else, `scripts/run-all.sh` | The pinned build sandbox, as root | `pnpm verify` needs the repo's reviewed container: Ubuntu 24.04 digest, Node 24.22.1, pnpm 10.34.7, Chrome for Testing 156.0.8078.47 |
 
-Inside the sandbox, `scripts/replay.mjs` serves the snapshot's pages and stylesheets on port
-4421, so the browser journeys run on production's own markup as well as on the build. The
-replay makes no network request. A third-party resource on a live page shows up as a request
-from Chrome to another origin, which T9 fails.
+Inside the sandbox, `scripts/replay.mjs` serves the snapshot's pages, stylesheets, fonts and
+images on port 4421, so the browser journeys run on production's own markup as well as on the
+build. The replay makes no network request. A third-party resource on a live page shows up as
+a request from Chrome to another origin, which T9 fails.
 
 ## Results
 
@@ -27,16 +27,17 @@ Each row prints one line per side: `PASS`, `FAIL`, `WARN` (T6 only: an external 
 fails without a 5xx) or `KNOWN` (a failure whose path the key lists under Known defects).
 Rows the key marks `target, fails on today's production` print `[target]`. Some rows have
 two results per side, a static one from `checks.mjs` and a rendered one from `browser.mjs`
-(T9, T17, T18). Both must pass.
+(T9, T17, T18, T24, T25, T32). Both must pass.
 
 The last line is `VERIFY_RESULT=pass|fail targets_failed_build=N targets_failed_live=N build:[...] live:[...]`.
 
 - `pass` means KEY passed, every invariant passed on both sides, COVER passed, doctor and
   cleanup passed.
 - COVER (`scripts/cover.mjs`) requires a result for every key row on every side it applies
-  to. T10, T14 and T23 are build only: the first two run on the checkout, and T23 compares
-  the build with production. Every other row needs a build result and a live result. A
-  result on one side never covers the other.
+  to. T10 and T14 are build only, because they run on the checkout. Every other row needs a
+  build result and a live result. T31 has both: its page part runs on each side, and its
+  workflow part (no `schedule` trigger) is a repo check inside the build result. A result on
+  one side never covers the other.
 - Target rows do not change `pass`. Read the counts. A target passes on a side only when all
   its results there pass. A PR that claims a target row must show `targets_failed_build=0`
   for it. After the deploy, `targets_failed_live` must reach 0 too.
@@ -77,8 +78,12 @@ On a host that reaches production:
 
 ```bash
 bash .claude/skills/verify/scripts/live.sh /tmp/tlac-live
-# LIVE_RESULT=done pages 8 same-origin 36 external 18 out /tmp/tlac-live
+# LIVE_RESULT=done pages 13 same-origin 30 external 17 out /tmp/tlac-live
 ```
+
+The 13 pages are the five light pages, the 404 page, robots.txt, sitemap.xml and the five
+routes in the key's Dark pages table. On 2026-11-02 the dark routes answer 404 on
+production. `live.sh` records that and still prints `done`. The dark target rows fail on it.
 
 Copy the folder into the sandbox (for Daytona, the toolbox file upload). It must be less
 than 6 hours old when `run-all.sh` reads it.
@@ -133,16 +138,22 @@ $H/cleanup.sh /srv/website
   against its page or stylesheet, as a browser does. T9 fails a resource from another
   origin in any loader the repo's third-party test lists, in srcset, in a style attribute,
   in a `<style>` block or in a stylesheet. Anchors a visitor may click are links, not loads.
-  T17 and T18 count only text and links outside hidden subtrees.
+  T17 and T18 count only text and links outside hidden subtrees. It also judges the html
+  parts of the redesign rows: T13's no `/dark/` URL, T15, T23 to T26, T28, T31, T32, T35 and
+  T38. The build side reads `dist/` for T28 and `REPO/.github/workflows` for T31.
 - `browser.mjs` drives the reviewed Chrome (`/opt/google/chrome/chrome`) through
   `@playwright/test`, against the preview and then the replay. It finds the nav by its
   accessible name, `navigation "Main"`, and each link by its label from the key's Pages
-  table. The header mark is `header a[href="/"]`. For T17 and T18 it requires the release
-  text and link to be rendered and visible (`checkVisibility`, non-zero size).
+  table, read without a leading page number. The header mark is `header a[href="/"]`. For
+  T17 and T18 it requires the release text and link to be rendered and visible
+  (`checkVisibility`, non-zero size). It judges the rendered rows T24, T25, T27, T29, T30,
+  T32 to T34, T36 and T37 on every light and dark page.
 - `live.sh` collects every `href`, `src`, `poster`, `data`, `srcset` candidate, `og:image`
   and `url()` in the pages, `url()` in each stylesheet, and each icon `src` in the web app
   manifest, resolved against the page, stylesheet or manifest. `checks.mjs` parses the
-  same pages and fails live T5 for any same-origin URL the collector missed.
+  same pages and fails live T5 for any same-origin URL the collector missed. It keeps every
+  same-origin asset that answers 200 under `files/`, so the replay can serve the fonts T34
+  needs and the images T36 lays out.
 
 The feature map in `features/` says which rows prove which visitor feature.
 
@@ -157,8 +168,8 @@ Each run writes `/srv/verify-evidence/<UTC>-<short head>/` (or `$VERIFY_EVIDENCE
 | `pnpm-verify.log` | The full entrypoint output for T14 |
 | `checks.json`, `browser.json` | Each row's verdict and details, per side |
 | `cover.txt` | COVER and the target count, with the failing target IDs per side |
-| `screens/` | Per side (`build-`, `live-`): a screenshot after each nav click and a full page of every page |
-| `live/` | The live snapshot this run judged |
+| `screens/` | Per side (`build-`, `live-`): a screenshot after each nav click and a full page of every light, 404 and dark page |
+| `live/` | The live snapshot this run judged, with every same-origin asset that answered 200 under `files/` |
 | `preview.log`, `replay.log` | The astro preview and live replay output |
 
 Proof standards: the journeys click the real links a visitor clicks, and the http checks

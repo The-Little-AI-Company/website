@@ -5,7 +5,7 @@ Rows T12 to T14.
 ## Sub-features
 
 - `/robots.txt`: 200, `text/plain`, `Allow: /` and the sitemap line (T12).
-- `/sitemap.xml`: 200, lists exactly the five page URLs from the key (T13).
+- `/sitemap.xml`: 200, lists exactly the five page URLs from the key, and no `/dark/` URL (T13).
 - `pnpm verify` passes in the pinned container: runtime and manager policy, `astro check`,
   the guarded build with `pnpm audit`, vitest, and Playwright with axe-core (T14).
 
