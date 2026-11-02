@@ -1,12 +1,12 @@
 # Brand and facts
 
-Rows T15 to T22. T17 to T22 are Holiday Sprint 1 targets. They fail on production until the
-facts PR merges and deploys.
+Rows T15 to T22. T15 is a redesign target. T16 to T22 are invariants.
 
 ## Sub-features
 
-- The header mark is the skull bunny: byte-identical to live production's header `<svg>`,
-  and the home `og:image:alt` contains "skull bunny mark" (T15).
+- The header mark is the skull bunny: the header `<svg>` has `shape-rendering="crispEdges"`
+  and one `<path>` whose `d` is exactly the key's Mark path, on every page, the 404 page and
+  each dark page that serves. The home `og:image:alt` contains "skull bunny mark" (T15).
 - No whole word "owl" or "Hoolio" in page text, `alt`, `title`, `aria-label` or any file
   name under `public/` (T16).
 - `/vivary/` and the home Vivary section show `v0.1.0-beta.1` and link
@@ -15,7 +15,7 @@ facts PR merges and deploys.
   badge or now line that gives Sept 22, 2026 as the latest release (T19).
 - `/vivary/` links neither npmjs.com nor pypi.org (T20).
 - `/about/` does not say "Zo" (whole word) or "zocomputer" (T21).
-- The home `<main>` text is in company voice (T22).
+- The home `<main>` text is in company voice. Naming Jeff in the third person is allowed (T22).
 
 ## How to get to it (user POV)
 
@@ -27,14 +27,17 @@ Read the home page, `/vivary/` and `/about/`.
   `hidden` attribute, inline `display:none`, `visibility:hidden` or `opacity:0`, and elements
   that never render. `browser.mjs` repeats T17 and T18 on the rendered page, where a
   stylesheet can hide content too: the element that holds the version text and the release
-  link must each pass `checkVisibility` (opacity included) with a non-zero size. Both
-  results must pass for the row to pass.
+  link must each pass `seen()`, which is `checkVisibility` with opacity, a box larger than 1px
+  and a place inside the page a visitor can scroll to. Both results must pass for the row to
+  pass.
 - The home Vivary section is the element around `#feature-vivary` (the Vivary heading), up
   to its `article` or the child of `section#work`. If a branch removes that id, T18 fails
   and says so.
 - T22 matches each term as a whole word, case-insensitive, with letters and digits as word
   characters (the Reviewer accepted this reading, 2026-11-01). The heading "I. The main
-  project" is removed before matching. The footer is outside `<main>` and keeps "Jeff Kazzee".
+  project" is removed before matching. The banned list is "I'm", "I’m", "I build", "I have",
+  "my" and "me". "Jeff Kazzee" is no longer banned, so "Jeff Kazzee builds them in rural
+  Idaho." passes.
 - Text for T16, T21 and T22 keeps the word breaks a reader sees: a block element (`p`,
   `div`, `li`, headings and the rest of the list in `checks.mjs`) or `<br>` separates words,
   and an inline element does not. So `<p>Zo</p><p>Company</p>` is two words, and
@@ -42,8 +45,15 @@ Read the home page, `/vivary/` and `/about/`.
 
 ## Gotchas
 
-- T15 needs the live snapshot. Sprint 3 (the holiday mark) changes the mark, so T15 needs a
-  key PR before that branch can pass.
+- T15 compares the `d` attribute as a string. The same shape written with other commands or
+  spacing fails. The header mark is the first `<svg>` inside `<header>`. A holiday mark
+  changes the path, so a theme needs a key PR for T15 first.
+- T15 reads the `shape-rendering` and `d` attributes, not computed style. A stylesheet that
+  sets the `shape-rendering` or `d` property overrides them unseen. The approved prototype
+  sets neither in CSS.
+- T16, T19, T21 and T22 read the HTML, so text a stylesheet hides still counts against them,
+  which only makes them stricter. Text that CSS `content` adds is not read. The approved
+  prototype uses `content` only as `""`.
 - T19 reads "as the latest release" as the status badges (`.status`) and the now line
   (`.now`), which are where the site states its current release. A history line elsewhere
   may name Sept 22, 2026.
@@ -52,6 +62,7 @@ Read the home page, `/vivary/` and `/about/`.
   text to pass `checkVisibility` (opacity included), be larger than 1px in both directions
   and sit inside the page area a visitor can scroll to. It does not detect `clip-path`, `color: transparent` or text
   covered by another element. The site uses none of these on the release text.
-- COVER checks that T17 and T18 have a result on each side, not that both producers ran.
+- COVER checks that T17 and T18 (and T11, T23, T25 and T32) have a result on each side, not
+  that both producers ran.
   `checks.mjs` and `browser.mjs` each write one, and COVER passes if one is missing.
   `run-all.sh` always runs both, and `summary.txt` shows both lines.

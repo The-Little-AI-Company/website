@@ -9,8 +9,8 @@ Rows T1 to T6 and T23.
 - The main nav: Callout, Vivary, About, Contact (T3).
 - The header mark, a link home (T4).
 - Every same-origin link and asset answers 200 (T5). External links answer without a 5xx (T6).
-- Pages a branch does not mean to change keep live production's text (T23, Sprint 1:
-  `/callout/` and `/contact/`).
+- Each page keeps the strings the key's Required strings table lists, in `<main>`, on the
+  light page and on its dark page once that serves (T23).
 
 ## How to get to it (user POV)
 
@@ -19,8 +19,10 @@ from every other. Mistyped URLs land on the 404 page.
 
 ## Driving it with Playwright and fetch
 
-- `browser.mjs` opens `/`, clicks `navigation "Main" > link "<label>"` for each nav row in
-  the key, and reads the landing path and `h1`. Screenshot `screens/<side>-T3-<label>.png`.
+- `browser.mjs` opens `/`, finds the link in the header nav (`header nav`, whatever its
+  accessible name) whose text, without a leading three-digit page number, is the label from
+  the key ("110 Callout" is "Callout"), clicks it, and reads the landing path and `h1`. The
+  `h1` must be visible, as `seen()` defines it below. Screenshot `screens/<side>-T3-<label>.png`.
 - On `/about/` it clicks `header a[href="/"]` and expects `/`. Screenshot `screens/<side>-T4-mark.png`.
 - Both journeys run on the build preview and on the live replay, so a renamed live nav label
   or a broken live mark link fails.
@@ -33,14 +35,29 @@ from every other. Mistyped URLs land on the 404 page.
   pages and the kept manifest, and live T5 fails for any same-origin URL that
   `same-origin.tsv` lacks, so a reference the grep misses fails instead of passing.
   The build side adds the manifest icons to T5 too.
+- T5 judges the URLs the light pages and the 404 page name, on both sides. A URL that only a
+  dark page names belongs to T24, which runs the same predicate over the dark pages.
+- T23 has two producers per side, and both must pass. `checks.mjs` reads the text of `<main>`
+  with inline-hidden subtrees skipped and whitespace collapsed. `browser.mjs` reads the
+  rendered `<main>` on each light page and each dark page that answers 200, keeping only text
+  whose element passes `seen()`: `checkVisibility` with opacity, a box larger than 1px, and
+  inside the page area a visitor can scroll to. That catches text a stylesheet hides. An
+  element that does not render inline separates words, as in the static reader.
 
 ## Gotchas
 
 - The sandbox network blocks many external hosts, so T6 on the build side is mostly
   `network ECONNRESET` warnings. The live side is the real external link check.
 - npmjs.com answers 403 to curl (a bot block), which T6 reports as WARN.
-- T23 compares `<main>` text with whitespace collapsed. Markup changes that keep the text
-  pass, which is the intent.
+- T23 matches each string case-sensitively. A restyle that keeps the words passes. A
+  dark page is read only when it answers 200, so T23 stays an invariant while the dark
+  routes 404.
+- T3 reads the first-level navigation as every `nav` inside a `header`. Production names it
+  "Main" and the approved prototype names it "Pages". Both pass. A header with no `nav` fails
+  with `/ has no <nav> inside a <header>`.
+- `seen()` does not detect `clip-path`, `color: transparent`, text covered by another element,
+  or a child of a 1px `overflow: hidden` box. The approved prototype hides no required text
+  these ways and has no screen-reader-only class.
 - Live T5 covers the resource types the site served on 2026-11-01: the HTML pages, their
   stylesheets and `url()` fonts, the web app manifest and its icons, `srcset` and
   `<picture><source>` images, preloads, robots.txt and sitemap.xml. It does not read CSS

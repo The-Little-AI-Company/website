@@ -2,10 +2,11 @@
 //   build: the branch under test, served by astro preview from its own dist/
 //   live:  a production snapshot that live.sh collected
 // Usage: node checks.mjs KEY_JSON BUILD_URL DIST_DIR PUBLIC_DIR LIVE_DIR WORK_DIR EVIDENCE_DIR
+// PUBLIC_DIR is REPO/public. T31 reads REPO/.github/workflows beside it.
 // Expected values come from the key or from the live snapshot, never from the build.
 import { createRequire } from 'node:module';
 import { readFileSync, readdirSync, statSync, writeFileSync, existsSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 
 const [keyFile, buildUrl, dist, publicDir, liveDir, work, evidence] = process.argv.slice(2);
 const { parse } = createRequire(join(work, 'package.json'))('node-html-parser');
@@ -27,8 +28,11 @@ function report(id, side, ok, name, details = []) {
   for (const d of details.slice(0, 15)) console.log(`        ${d}`);
 }
 
+const EM_DASH = String.fromCodePoint(0x2014);
+const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // Whole word, case-insensitive, letters and digits only count as word characters.
-const word = (term) => new RegExp(`(?<![\\p{L}\\p{N}])${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}])`, 'iu');
+const word = (term) => new RegExp(`(?<![\\p{L}\\p{N}])${esc(term)}(?![\\p{L}\\p{N}])`, 'iu');
+const walk = (d) => readdirSync(d).flatMap((f) => (statSync(join(d, f)).isDirectory() ? walk(join(d, f)) : [join(d, f)]));
 // Text the way a reader sees word boundaries: a block element or <br> separates words, inline
 // elements do not ("Hoo<span>lio</span>" stays one word, "<p>Zo</p><p>Company</p>" is two).
 const BLOCKS = new Set(['ADDRESS', 'ARTICLE', 'ASIDE', 'BLOCKQUOTE', 'BR', 'CAPTION', 'DD', 'DETAILS', 'DIALOG', 'DIV', 'DL',
@@ -50,6 +54,13 @@ const text = (el) => textOf(el, () => false);
 
 // ---------- the two sides as one shape ----------
 const PATHS = { home: '/', callout: '/callout/', vivary: '/vivary/', about: '/about/', contact: '/contact/' };
+const nameOf = (path) => Object.keys(PATHS).find((n) => PATHS[n] === path);
+// The key's dark routes, named after their light page: /dark/callout/ is dark-callout, as in live.sh.
+const DARK = Object.fromEntries(key.dark.map((d) => [`dark-${nameOf(d.light)}`, d.path]));
+const LIGHT_OF = Object.fromEntries(key.dark.map((d) => [`dark-${nameOf(d.light)}`, d.light]));
+const darkOf = (light) => key.dark.find((d) => d.light === light).path;
+const pathOf = (n) => PATHS[n] ?? DARK[n] ?? '/does-not-exist/';
+const isDarkPath = (path) => path === '/dark' || path.startsWith('/dark/');
 
 async function buildSide() {
   // Every response the judge reads, pages and assets, is kept for T8's cookie check.
@@ -60,11 +71,12 @@ async function buildSide() {
     return { status: res.status, headers: Object.fromEntries(res.headers), body: await res.text() };
   };
   const pages = {};
-  for (const [name, path] of Object.entries(PATHS)) pages[name] = await get(path);
+  for (const [name, path] of [...Object.entries(PATHS), ...Object.entries(DARK)]) pages[name] = await get(path);
   pages.notfound = await get('/does-not-exist/');
   pages.robots = await get('/robots.txt');
   pages.sitemap = await get('/sitemap.xml');
-  return { name: 'build', pages, get, assetCookies: () => cookies };
+  const sheet = async (u) => { const r = await get(u); return r.status === 200 ? r.body : null; };
+  return { name: 'build', pages, get, sheet, assetCookies: () => cookies };
 }
 
 function liveSide() {
@@ -97,7 +109,13 @@ function readLive() {
   const site = /^site (\S+)/m.exec(readFileSync(join(liveDir, 'meta.txt'), 'utf8'))?.[1] ?? SITE;
   const cookieFile = join(liveDir, 'asset-cookies.tsv');
   const assetCookies = () => (existsSync(cookieFile) ? readFileSync(cookieFile, 'utf8').split('\n').filter(Boolean) : null);
-  return { name: 'live', site, pages, age, assetCookies, sameOrigin: tsv('same-origin.tsv'), external: tsv('external.tsv'), css: readFileSync(join(liveDir, 'css.txt'), 'utf8') };
+  const css = readFileSync(join(liveDir, 'css.txt'), 'utf8');
+  // css.txt is every kept stylesheet, each after a /* path */ line.
+  const parts = css.split(/^\/\* (\S+) \*\/$/m);
+  const sheets = [];
+  for (let i = 1; i < parts.length; i += 2) sheets.push({ where: parts[i], text: parts[i + 1] });
+  const sheet = (u) => { const f = join(liveDir, 'files', u.split('?')[0]); return existsSync(f) ? readFileSync(f, 'utf8') : null; };
+  return { name: 'live', site, pages, age, assetCookies, sameOrigin: tsv('same-origin.tsv'), external: tsv('external.tsv'), css, sheets, sheet };
 }
 
 // Elements that make the browser fetch something, and the attribute holding the URL. The same
@@ -173,12 +191,113 @@ async function judge(side) {
   const p = side.pages;
   const doc = Object.fromEntries(Object.entries(p).map(([n, v]) => [n, parse(v.body, { comment: false })]));
   const s = side.name;
+  const lightNames = Object.keys(PATHS);
+  const htmlPages = [...lightNames, 'notfound'];
+  // A dark route that does not answer 200 is not a page yet. Rows that need it say so once each.
+  const darkNames = Object.keys(DARK);
+  const darkUp = darkNames.filter((n) => p[n]?.status === 200);
+  const darkDown = darkNames.filter((n) => p[n]?.status !== 200)
+    .map((n) => `${DARK[n]} status ${p[n] ? p[n].status : 'missing, not collected by live.sh'}`);
+
+  // The CSS a page applies, in document order: its <style> blocks and its same-origin stylesheets.
+  // text is null for a stylesheet this side cannot read.
+  const pageCss = async (n) => {
+    const out = [];
+    for (const el of doc[n].querySelectorAll('style, link[rel~="stylesheet"][href]')) {
+      if (el.tagName === 'STYLE') { out.push({ where: `${pathOf(n)} <style>`, text: el.text }); continue; }
+      const u = resolveRef(el.getAttribute('href'), SITE + pathOf(n));
+      if (u && isOwn(u)) out.push({ where: u, text: await side.sheet(u) });
+    }
+    return out;
+  };
+
+  // T5 for a set of pages. Build: every same-origin URL the pages, their stylesheets and their
+  // manifest name, requested now. Live: the same URLs, read from what live.sh collected.
+  const buildAssets = async (names) => {
+    const own = new Set();
+    const ext = new Set();
+    const bad = [];
+    for (const n of names) for (const u of urlsOf(doc[n], pathOf(n))) (isOwn(u) ? own : ext).add(u);
+    for (const u of [...own]) if (u.split('?')[0].endsWith('.css')) {
+      for (const ref of cssUrls((await side.get(u)).body)) { const r = resolveRef(ref, SITE + u); if (r) (isOwn(r) ? own : ext).add(r); }
+    }
+    for (const u of [...own]) if (isManifest(u)) {
+      const icons = manifestIcons((await side.get(u)).body, u);
+      if (!icons) bad.push(`manifest ${u} is not JSON`);
+      for (const i of icons ?? []) (isOwn(i) ? own : ext).add(i);
+    }
+    for (const u of own) { const r = await side.get(u); if (r.status !== 200) bad.push(`${r.status} ${u}`); }
+    return { own, ext, bad };
+  };
+  // live.sh collects with grep. The parser decides what it had to collect: every same-origin URL
+  // in the pages, in their stylesheets and in their manifest needs a status in same-origin.tsv.
+  const liveAssets = (names) => {
+    const bad = [];
+    const siteOrigin = new URL(side.site).origin;
+    const local = (u) => { const x = new URL(u); return x.origin === siteOrigin ? x.pathname + x.search : u; };
+    const collected = new Map(side.sameOrigin.map(([c, u]) => [local(u), c]));
+    const own = new Set();
+    for (const n of names) for (const u of urlsOf(doc[n], pathOf(n))) if (isOwn(u)) own.add(u);
+    const kept = (u, kind) => {
+      const body = side.sheet(u);
+      if (body === null) bad.push(`${kind} ${u} not kept by live.sh`);
+      return body;
+    };
+    for (const u of [...own]) if (u.split('?')[0].endsWith('.css')) {
+      const body = kept(u, 'stylesheet');
+      for (const ref of body === null ? [] : cssUrls(body)) { const r = resolveRef(ref, SITE + u); if (r && isOwn(r)) own.add(r); }
+    }
+    for (const u of [...own]) if (isManifest(u)) {
+      const body = kept(u, 'manifest');
+      if (body === null) continue;
+      const icons = manifestIcons(body, u);
+      if (!icons) bad.push(`manifest ${u} is not JSON`);
+      for (const i of icons ?? []) if (isOwn(i)) own.add(i);
+    }
+    for (const u of own) {
+      const c = collected.get(u);
+      if (c === undefined) bad.push(`not collected by live.sh: ${u}`);
+      else if (c !== '200') bad.push(`${c} ${u}`);
+    }
+    return { own, bad };
+  };
+  const scripted = (names) => names.filter((n) => /<script/i.test(p[n].body));
+  const storage = (names) => names.filter((n) => /document\.cookie|localStorage|sessionStorage|navigator\.sendBeacon/.test(p[n].body));
+  const footerless = (names) => names.filter((n) => !text(doc[n].querySelector('footer')).includes(key.footer));
+  // T9's html part for a set of pages: no resource from another origin in any loader, no
+  // connection hint, nothing foreign in any stylesheet.
+  const foreign = async (names) => {
+    const bad = [];
+    for (const n of names) {
+      for (const f of foreignLoads(doc[n], pathOf(n))) bad.push(`${n} ${f}`);
+      for (const l of doc[n].querySelectorAll('link[rel]')) {
+        if (/\b(preconnect|dns-prefetch|prefetch|prerender)\b/.test(l.getAttribute('rel'))) bad.push(`${n} ${l.toString()}`);
+      }
+    }
+    const sheets = new Set(names.flatMap((n) => doc[n].querySelectorAll('link[rel~="stylesheet"][href]')
+      .map((l) => resolveRef(l.getAttribute('href'), SITE + pathOf(n))).filter((u) => u && isOwn(u))));
+    const cssText = s === 'live' ? side.css : (await Promise.all([...sheets].map(async (u) => (await side.get(u)).body))).join('\n');
+    if (!sheets.size || !cssText.trim()) bad.push('no stylesheet text to check');
+    if (/@import/i.test(cssText)) bad.push('CSS @import');
+    for (const u of cssUrls(cssText)) if (/^(https?:)?\/\//i.test(u) && !resolveRef(u, SITE + '/').startsWith('/')) bad.push(`CSS url ${u}`);
+    return bad;
+  };
+  const owlish = (names) => {
+    const bad = [];
+    for (const n of names) {
+      const strings = [text(doc[n].querySelector('body'))];
+      for (const el of doc[n].querySelectorAll('[alt],[title],[aria-label]')) for (const a of ['alt', 'title', 'aria-label']) strings.push(el.getAttribute(a) ?? '');
+      strings.push(text(doc[n].querySelector('title')));
+      for (const t of ['owl', 'Hoolio']) if (strings.some((x) => word(t).test(x))) bad.push(`${n} has "${t}"`);
+    }
+    return bad;
+  };
 
   // T1: every page 200, h1 matches the key's Pages table.
   {
     const bad = [];
     for (const pg of key.pages) {
-      const name = Object.keys(PATHS).find((n) => PATHS[n] === pg.path);
+      const name = nameOf(pg.path);
       const h1 = text(doc[name]?.querySelector('h1'));
       if (p[name]?.status !== 200) bad.push(`${pg.path} status ${p[name]?.status}`);
       if (h1 !== pg.h1) bad.push(`${pg.path} h1 "${h1}" expected "${pg.h1}"`);
@@ -196,24 +315,7 @@ async function judge(side) {
   }
   // T5 and T6: same-origin links and assets, then external links.
   if (s === 'build') {
-    const own = new Set();
-    const ext = new Set();
-    const css = [];
-    for (const [n, path] of [...Object.entries(PATHS), ['notfound', '/does-not-exist/']]) {
-      for (const u of urlsOf(doc[n], path)) (isOwn(u) ? own : ext).add(u);
-    }
-    for (const u of [...own]) if (u.split('?')[0].endsWith('.css')) css.push([u, (await side.get(u)).body]);
-    for (const [u, body] of css) for (const ref of cssUrls(body)) {
-      const r = resolveRef(ref, SITE + u);
-      if (r) (isOwn(r) ? own : ext).add(r);
-    }
-    const bad = [];
-    for (const u of [...own]) if (isManifest(u)) {
-      const icons = manifestIcons((await side.get(u)).body, u);
-      if (!icons) bad.push(`manifest ${u} is not JSON`);
-      for (const i of icons ?? []) (isOwn(i) ? own : ext).add(i);
-    }
-    for (const u of own) { const r = await side.get(u); if (r.status !== 200) bad.push(`${r.status} ${u}`); }
+    const { own, ext, bad } = await buildAssets(htmlPages);
     report('T5', s, !bad.length, `${own.size} same-origin links and assets return 200`, bad);
     const fails = [];
     const warns = [];
@@ -226,46 +328,20 @@ async function judge(side) {
     }
     report('T6', s, fails.length ? false : warns.length ? 'warn' : true, `${ext.size} external links, ${fails.length} 5xx, ${warns.length} other failures`, [...fails, ...warns]);
   } else {
-    const bad = side.sameOrigin.filter(([c]) => c !== '200').map(([c, u]) => `${c} ${u}`);
-    // live.sh collects with grep. The parser decides what it had to collect: every same-origin URL
-    // in the pages, in their stylesheets and in their manifest needs a status in same-origin.tsv.
-    const siteOrigin = new URL(side.site).origin;
-    const collected = new Set(side.sameOrigin.map(([, u]) => { const x = new URL(u); return x.origin === siteOrigin ? x.pathname + x.search : u; }));
-    const expected = new Set();
-    for (const [n, path] of [...Object.entries(PATHS), ['notfound', '/does-not-exist/']]) for (const u of urlsOf(doc[n], path)) if (isOwn(u)) expected.add(u);
-    const kept = (u, kind) => {
-      const file = join(liveDir, 'files', u.split('?')[0]);
-      if (existsSync(file)) return readFileSync(file, 'utf8');
-      bad.push(`${kind} ${u} not kept by live.sh`);
-      return null;
-    };
-    for (const u of [...expected]) if (u.split('?')[0].endsWith('.css')) {
-      const body = kept(u, 'stylesheet');
-      for (const ref of body === null ? [] : cssUrls(body)) { const r = resolveRef(ref, SITE + u); if (r && isOwn(r)) expected.add(r); }
-    }
-    for (const u of [...expected]) if (isManifest(u)) {
-      const body = kept(u, 'manifest');
-      if (body === null) continue;
-      const icons = manifestIcons(body, u);
-      if (!icons) bad.push(`manifest ${u} is not JSON`);
-      for (const i of icons ?? []) if (isOwn(i)) expected.add(i);
-    }
-    for (const u of expected) if (!collected.has(u)) bad.push(`not collected by live.sh: ${u}`);
-    report('T5', s, side.sameOrigin.length > 0 && !bad.length, `${side.sameOrigin.length} same-origin links and assets return 200`, bad);
+    const { own, bad } = liveAssets(htmlPages);
+    report('T5', s, side.sameOrigin.length > 0 && !bad.length, `${own.size} same-origin links and assets return 200`, bad);
     // The same completeness rule for external links: every one the pages hold needs a status.
     const external = new Set(side.external.map(([, u]) => { try { const x = new URL(u); x.hash = ''; return x.href; } catch { return u; } }));
     const missing = [];
-    for (const [n, path] of [...Object.entries(PATHS), ['notfound', '/does-not-exist/']]) {
-      for (const u of urlsOf(doc[n], path)) if (!isOwn(u) && !external.has(u)) missing.push(`not collected by live.sh: ${u}`);
+    for (const n of htmlPages) {
+      for (const u of urlsOf(doc[n], pathOf(n))) if (!isOwn(u) && !external.has(u)) missing.push(`not collected by live.sh: ${u}`);
     }
     const fails = [...new Set(missing), ...side.external.filter(([c]) => /^5/.test(c)).map(([c, u]) => `${c} ${u}`)];
     const warns = side.external.filter(([c]) => !/^[23]/.test(c) && !/^5/.test(c)).map(([c, u]) => `${c} ${u}`);
     report('T6', s, fails.length ? false : warns.length ? 'warn' : true, `${side.external.length} external links, ${fails.length} 5xx or not collected, ${warns.length} other failures`, [...fails, ...warns]);
   }
-  const htmlPages = [...Object.keys(PATHS), 'notfound'];
   // T7: no script element.
-  report('T7', s, !htmlPages.some((n) => /<script/i.test(p[n].body)), 'no <script on any page',
-    htmlPages.filter((n) => /<script/i.test(p[n].body)));
+  report('T7', s, !scripted(htmlPages).length, 'no <script on any page', scripted(htmlPages));
   // T8: no Set-Cookie, no storage APIs.
   {
     const bad = [];
@@ -275,33 +351,16 @@ async function judge(side) {
     const assets = side.assetCookies();
     if (assets === null) bad.push('live.sh kept no asset-cookies.tsv');
     for (const u of assets ?? []) bad.push(`asset ${u} Set-Cookie`);
-    for (const n of htmlPages) if (/document\.cookie|localStorage|sessionStorage|navigator\.sendBeacon/.test(p[n].body)) bad.push(`${n} storage API`);
+    for (const n of storage(htmlPages)) bad.push(`${n} storage API`);
     report('T8', s, !bad.length, 'no cookie header and no storage API', bad);
   }
-  // T9, the html part (browser.mjs has the browser part on both sides): no resource from
-  // another origin in any loader, no connection hint, nothing foreign in any stylesheet.
+  // T9, the html part (browser.mjs has the browser part on both sides).
   {
-    const bad = [];
-    const pathOf = (n) => PATHS[n] ?? '/does-not-exist/';
-    for (const n of htmlPages) {
-      for (const f of foreignLoads(doc[n], pathOf(n))) bad.push(`${n} ${f}`);
-      for (const l of doc[n].querySelectorAll('link[rel]')) {
-        if (/\b(preconnect|dns-prefetch|prefetch|prerender)\b/.test(l.getAttribute('rel'))) bad.push(`${n} ${l.toString()}`);
-      }
-    }
-    const sheets = new Set(htmlPages.flatMap((n) => doc[n].querySelectorAll('link[rel~="stylesheet"][href]')
-      .map((l) => resolveRef(l.getAttribute('href'), SITE + pathOf(n))).filter((u) => u && isOwn(u))));
-    const cssText = s === 'live' ? side.css : (await Promise.all([...sheets].map(async (u) => (await side.get(u)).body))).join('\n');
-    if (!sheets.size || !cssText.trim()) bad.push('no stylesheet text to check');
-    if (/@import/i.test(cssText)) bad.push('CSS @import');
-    for (const u of cssUrls(cssText)) if (/^(https?:)?\/\//i.test(u) && !resolveRef(u, SITE + '/').startsWith('/')) bad.push(`CSS url ${u}`);
+    const bad = await foreign(htmlPages);
     report('T9', s, !bad.length, 'no third-party loader, connection hint or foreign CSS (html part)', bad);
   }
-  // T11: footer sentence on every page.
-  {
-    const bad = htmlPages.filter((n) => !text(doc[n].querySelector('footer')).includes(key.footer));
-    report('T11', s, !bad.length, 'footer privacy promise on every page', bad);
-  }
+  // T11: footer sentence on every page. browser.mjs checks that the rendered footer shows it.
+  report('T11', s, !footerless(htmlPages).length, 'footer privacy promise on every page', footerless(htmlPages));
   // T12 robots, T13 sitemap.
   {
     const r = p.robots;
@@ -322,36 +381,34 @@ async function judge(side) {
     const locs = [...r.body.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]).sort();
     const want = key.pages.map((pg) => SITE + pg.path).sort();
     if (JSON.stringify(locs) !== JSON.stringify(want)) bad.push(`locs ${locs.join(' ')}`);
-    report('T13', s, !bad.length, 'sitemap.xml lists exactly the key pages', bad);
+    for (const l of locs) if (isDarkPath(new URL(l, SITE).pathname)) bad.push(`dark URL ${l}`);
+    report('T13', s, !bad.length, 'sitemap.xml lists exactly the key pages, no /dark/ URL', bad);
   }
-  // T15: header mark equals live production's, og:image:alt names the mark.
+  // T15: the header mark is the key's Mark path, drawn crisp, and og:image:alt names the mark.
   {
     const bad = [];
-    const mark = (d) => d.querySelector('header svg')?.toString() ?? '';
-    const reference = mark(parse(live?.pages.home.body ?? '', { comment: false }));
-    if (!reference) bad.push('no live reference mark (live snapshot missing)');
-    for (const n of htmlPages) if (mark(doc[n]) !== reference) bad.push(`${n} header svg differs from live`);
+    for (const n of [...htmlPages, ...darkUp]) {
+      const svg = doc[n].querySelector('header svg');
+      if (!svg) { bad.push(`${pathOf(n)} no header svg`); continue; }
+      if (svg.getAttribute('shape-rendering') !== 'crispEdges') bad.push(`${pathOf(n)} header svg shape-rendering "${svg.getAttribute('shape-rendering') ?? 'none'}"`);
+      const paths = svg.querySelectorAll('path');
+      if (paths.length !== 1) bad.push(`${pathOf(n)} header svg has ${paths.length} <path> elements, expected 1`);
+      else if (paths[0].getAttribute('d') !== key.mark) bad.push(`${pathOf(n)} header svg path d "${(paths[0].getAttribute('d') ?? '').slice(0, 40)}..." is not the Mark path`);
+    }
     const alt = doc.home.querySelector('meta[property="og:image:alt"]')?.getAttribute('content') ?? '';
     if (!alt.includes('skull bunny mark')) bad.push(`og:image:alt "${alt}"`);
-    report('T15', s, !bad.length, 'the mark is the skull bunny', bad);
+    report('T15', s, !bad.length, 'the header mark is the key\'s skull bunny path, crispEdges', bad);
   }
   // T16: no owl or Hoolio.
   {
-    const bad = [];
-    for (const n of htmlPages) {
-      const strings = [text(doc[n].querySelector('body'))];
-      for (const el of doc[n].querySelectorAll('[alt],[title],[aria-label]')) for (const a of ['alt', 'title', 'aria-label']) strings.push(el.getAttribute(a) ?? '');
-      strings.push(text(doc[n].querySelector('title')));
-      for (const t of ['owl', 'Hoolio']) if (strings.some((x) => word(t).test(x))) bad.push(`${n} has "${t}"`);
-    }
+    const bad = owlish(htmlPages);
     if (s === 'build') {
-      const walk = (d) => readdirSync(d).flatMap((f) => (statSync(join(d, f)).isDirectory() ? walk(join(d, f)) : [join(d, f)]));
       for (const f of walk(publicDir)) for (const t of ['owl', 'Hoolio']) if (word(t).test(relative(publicDir, f).replace(/[._/-]/g, ' '))) bad.push(`public/${relative(publicDir, f)}`);
     }
     report('T16', s, !bad.length, 'no owl or Hoolio in text, attributes or public file names', bad);
   }
-  // T17 to T22: Holiday Sprint 1 targets.
-  // Only text and links a visitor can see count. browser.mjs repeats both checks on the rendered page.
+  // T17 to T22: Holiday Sprint 1 facts, now invariants.
+  // Only text and links a visitor can see count. browser.mjs repeats T17 and T18 on the rendered page.
   const hasRelease = (el) => el?.querySelectorAll('a[href]').some((a) => a.getAttribute('href') === RELEASE && shown(a, el) && visibleText(a));
   {
     const bad = [];
@@ -395,23 +452,187 @@ async function judge(side) {
     if (strings.some((x) => /zocomputer/i.test(x))) bad.push('"zocomputer"');
     report('T21', s, !bad.length, '/about/ does not mention Zo', bad);
   }
+  // T22: company voice. Naming Jeff in the third person is allowed.
   {
     const main = text(doc.home.querySelector('main')).replace('I. The main project', '');
-    const bad = ["I'm", 'I’m', 'I build', 'I have', 'my', 'me', 'Jeff Kazzee']
+    const bad = ["I'm", 'I’m', 'I build', 'I have', 'my', 'me']
       .filter((t) => word(t).test(main))
       .map((t) => `"${t}" near: ${main.slice(Math.max(0, main.search(word(t)) - 30), main.search(word(t)) + 40)}`);
     report('T22', s, !bad.length, 'home <main> is in company voice', bad);
   }
-  // T23: pages Sprint 1 leaves alone keep live production's text. Build side only.
-  if (s === 'build') {
+  // T23: each page in the Required strings table, and its dark page once it serves, keeps every
+  // string in the visible text of <main>. This sees inline hiding only. browser.mjs checks the
+  // rendered <main>, where a stylesheet can hide text too.
+  {
     const bad = [];
-    for (const n of ['callout', 'contact']) {
-      const want = text(parse(live?.pages[n]?.body ?? '', { comment: false }).querySelector('main'));
-      const got = text(doc[n].querySelector('main'));
-      if (!want) bad.push(`${n} no live reference`);
-      else if (got !== want) bad.push(`${n} <main> text differs from live`);
+    for (const r of key.required) {
+      for (const n of [nameOf(r.path), ...darkUp.filter((d) => LIGHT_OF[d] === r.path)]) {
+        const main = visibleText(doc[n].querySelector('main'));
+        for (const want of r.strings) if (!main.includes(want)) bad.push(`${pathOf(n)} <main> lacks "${want}"`);
+      }
     }
-    report('T23', s, !bad.length, '/callout/ and /contact/ text matches live production', bad);
+    report('T23', s, !bad.length, `${key.required.length} pages keep their required strings in <main>`, bad);
+  }
+  // T24: each dark route serves its light page's content under the light pages' rules.
+  {
+    const bad = [...darkDown];
+    for (const n of darkUp) {
+      const want = key.pages.find((pg) => pg.path === LIGHT_OF[n]).h1;
+      const h1 = text(doc[n].querySelector('h1'));
+      if (h1 !== want) bad.push(`${DARK[n]} h1 "${h1}" expected "${want}"`);
+      const scheme = doc[n].querySelector('head meta[name="color-scheme"]')?.getAttribute('content');
+      if (scheme !== 'dark') bad.push(`${DARK[n]} meta color-scheme "${scheme ?? 'none'}", expected "dark"`);
+      const canonical = doc[n].querySelectorAll('head link[rel~="canonical"]').map((l) => l.getAttribute('href'));
+      if (!canonical.includes(SITE + LIGHT_OF[n])) bad.push(`${DARK[n]} canonical "${canonical.join(' ')}", expected ${SITE}${LIGHT_OF[n]}`);
+    }
+    if (darkUp.length) {
+      const assets = s === 'build' ? await buildAssets(darkUp) : liveAssets(darkUp);
+      bad.push(...assets.bad.map((d) => `T5 ${d}`));
+      const cookied = new Set((side.assetCookies() ?? []).map((u) => (isOwn(u) ? u : new URL(u).pathname)));
+      for (const u of assets.own) if (cookied.has(u)) bad.push(`T8 asset ${u} Set-Cookie`);
+      for (const n of darkUp) if (p[n].headers['set-cookie']) bad.push(`T8 ${DARK[n]} Set-Cookie`);
+      bad.push(...scripted(darkUp).map((n) => `T7 ${DARK[n]} has <script`));
+      bad.push(...storage(darkUp).map((n) => `T8 ${DARK[n]} storage API`));
+      bad.push(...(await foreign(darkUp)).map((d) => `T9 ${d}`));
+      bad.push(...footerless(darkUp).map((n) => `T11 ${DARK[n]} lacks the footer promise`));
+      bad.push(...owlish(darkUp).map((d) => `T16 ${d}`));
+    }
+    report('T24', s, !bad.length, `${darkUp.length} of ${darkNames.length} dark routes serve the light page's content`, bad);
+  }
+  // T25: every light page links its dark route, and every dark page links back, visibly.
+  {
+    const bad = [...darkDown];
+    const variantLink = (n, label, target) => {
+      const links = doc[n].querySelectorAll('a[href]').filter((a) => visibleText(a) === label && shown(a, doc[n]));
+      const hrefs = links.map((a) => resolveRef(a.getAttribute('href'), SITE + pathOf(n)));
+      if (!links.length) bad.push(`${pathOf(n)} has no visible "${label}" link`);
+      else if (!hrefs.includes(target)) bad.push(`${pathOf(n)} "${label}" links ${hrefs.join(' ')}, expected ${target}`);
+    };
+    for (const n of htmlPages) variantLink(n, 'Dark version', darkOf(n === 'notfound' ? '/' : PATHS[n]));
+    for (const n of darkUp) variantLink(n, 'Light version', LIGHT_OF[n]);
+    report('T25', s, !bad.length, 'a visible "Dark version" and "Light version" link on every page', bad);
+  }
+  // T26: page links stay in their variant. Only the variant link crosses. Assets do not count.
+  {
+    const bad = [...darkDown];
+    const isPage = (u) => { const last = u.split('?')[0].split('/').pop(); return !last || /\.html?$/.test(last) || !/\.[a-z0-9]+$/i.test(last); };
+    const pageLinks = (n) => doc[n].querySelectorAll('a[href]')
+      .map((a) => ({ label: visibleText(a), u: resolveRef(a.getAttribute('href'), SITE + pathOf(n)) }))
+      .filter(({ u }) => u && isOwn(u) && isPage(u));
+    // The one crossing allowed is the variant link T25 names: its label, to this page's other variant.
+    const variant = (label, u, want, to) => label === want && u.split('?')[0] === to;
+    for (const n of htmlPages) for (const { label, u } of pageLinks(n)) {
+      if (isDarkPath(u) && !variant(label, u, 'Dark version', darkOf(n === 'notfound' ? '/' : PATHS[n]))) bad.push(`${pathOf(n)} links into the dark variant: ${u} "${label}"`);
+    }
+    for (const n of darkUp) for (const { label, u } of pageLinks(n)) {
+      if (!isDarkPath(u) && !variant(label, u, 'Light version', LIGHT_OF[n])) bad.push(`${pathOf(n)} leaves the dark variant: ${u} "${label}"`);
+    }
+    report('T26', s, !bad.length, 'page links stay in their variant except the variant link', bad);
+  }
+  // T28: no prefers-color-scheme in any HTML or CSS, and no stored preference (T7, T8 rules).
+  {
+    const bad = [];
+    const files = s === 'build'
+      ? (existsSync(dist) ? walk(dist) : []).filter((f) => /\.(html|css)$/.test(f))
+        .map((f) => ({ where: `dist/${relative(dist, f)}`, html: f.endsWith('.html'), text: readFileSync(f, 'utf8') }))
+      : [...[...htmlPages, ...darkUp].map((n) => ({ where: pathOf(n), html: true, text: p[n].body })),
+        ...side.sheets.map((c) => ({ ...c, html: false }))];
+    if (!files.some((f) => f.html)) bad.push(s === 'build' ? `no HTML under ${dist}` : 'no pages');
+    for (const f of files) {
+      if (/prefers-color-scheme/i.test(f.text)) bad.push(`${f.where} has prefers-color-scheme`);
+      if (f.html && /<script/i.test(f.text)) bad.push(`${f.where} has <script`);
+      if (f.html && /document\.cookie|localStorage|sessionStorage|navigator\.sendBeacon/.test(f.text)) bad.push(`${f.where} has a storage API`);
+    }
+    report('T28', s, !bad.length, `${files.length} HTML and CSS files have no prefers-color-scheme and no stored preference`, bad);
+  }
+  // T31: the holiday overlay is off. A season stylesheet is one named for a season or keyed off
+  // data-season, which is how the approved overlay is built.
+  {
+    const bad = [];
+    for (const n of [...htmlPages, ...darkUp]) {
+      const season = doc[n].querySelector('html')?.getAttribute('data-season');
+      if (season !== undefined) bad.push(`${pathOf(n)} <html data-season="${season}">`);
+      for (const c of await pageCss(n)) if (/season/i.test(c.where) || /data-season/i.test(c.text ?? '')) bad.push(`${pathOf(n)} loads season CSS ${c.where}`);
+    }
+    if (s === 'build') {
+      const dir = join(dirname(publicDir), '.github', 'workflows');
+      if (!existsSync(dir)) bad.push(`no workflows folder at ${dir}`);
+      else for (const f of readdirSync(dir).filter((x) => /\.ya?ml$/.test(x))) {
+        const yml = readFileSync(join(dir, f), 'utf8').split('\n').map((l) => l.replace(/(^|\s)#.*$/, '')).join('\n');
+        if (/^\s*schedule\s*:|[[,]\s*schedule\s*[\],]/m.test(yml)) bad.push(`.github/workflows/${f} has a schedule trigger`);
+      }
+    }
+    report('T31', s, !bad.length, s === 'build' ? 'no season overlay on any page and no scheduled workflow' : 'no season overlay on any page', bad);
+  }
+  // T32, the html part: the last declaration of each token in the page's CSS has the key's value.
+  // Selectors and media are not read. browser.mjs judges the computed values and the pink-text part.
+  {
+    const bad = [...darkDown];
+    const last = (css, name) => [...css.matchAll(new RegExp(`(?<![\\w-])${esc(name)}\\s*:\\s*([^;}!]*)`, 'gi'))].pop()?.[1].trim();
+    for (const [names, tokens] of [[lightNames, key.lightTokens], [darkUp, key.darkTokens]]) {
+      for (const n of names) {
+        const css = await pageCss(n);
+        for (const c of css) if (c.text === null) bad.push(`${pathOf(n)} stylesheet ${c.where} unreadable`);
+        const all = css.map((c) => c.text ?? '').join('\n');
+        for (const [name, value] of Object.entries(tokens)) {
+          const got = last(all, name);
+          if (got?.toLowerCase() !== value.toLowerCase()) bad.push(`${pathOf(n)} CSS does not define ${name}: ${value}${got === undefined ? '' : `, its last declaration is ${got}`}`);
+        }
+      }
+    }
+    report('T32', s, !bad.length, 'light and dark tokens defined with the key\'s values (html part)', bad);
+  }
+  // T35: every three-digit number in a nav, the page index or the button bar is a link to a route
+  // of the page's own variant, an anchor on the page, or its external site from the key.
+  {
+    const bad = [];
+    const NUM = /(?<![\p{L}\p{N}])\d{3}(?![\p{L}\p{N}])/gu;
+    const target = (n, num, href, routes) => {
+      if (href.startsWith('#')) return doc[n].querySelector(`[id="${href.slice(1)}"]`) ? null : 'no such anchor on the page';
+      const u = resolveRef(href, SITE + pathOf(n));
+      if (u && isOwn(u)) return routes.has(u.split('?')[0]) || (u.split('?')[0] === pathOf(n) && href.includes('#')) ? null : 'not a route of this variant';
+      const ext = key.externalNumbers.find((e) => e.number === num);
+      if (!u || !ext) return 'not a route of this variant and not an external page number';
+      const bare = u.replace(/\/$/, '');
+      return ext.targets.some((t) => bare === t.replace(/\/$/, '') || bare.startsWith(`${t.replace(/\/$/, '')}/`)) ? null : `expected ${ext.targets.join(' or ')}`;
+    };
+    for (const n of [...htmlPages, ...darkUp]) {
+      const routes = new Set((isDarkPath(pathOf(n)) ? key.dark : key.pages).map((r) => r.path));
+      const texts = new Set();
+      const collect = (el) => { for (const c of el.childNodes) if (c.nodeType === 3) texts.add(c); else collect(c); };
+      for (const el of doc[n].querySelectorAll('nav, .pageindex, .buttonbar')) collect(el);
+      let seen = 0;
+      for (const t of texts) {
+        if (!shown(t.parentNode, doc[n])) continue;
+        for (const [num] of t.text.matchAll(NUM)) {
+          seen++;
+          let a = t.parentNode;
+          while (a && !(a.tagName === 'A' && a.getAttribute('href') !== undefined)) a = a.parentNode;
+          if (!a) { bad.push(`${pathOf(n)} page number ${num} is not inside a link`); continue; }
+          const why = target(n, num, a.getAttribute('href').trim(), routes);
+          if (why) bad.push(`${pathOf(n)} page number ${num} links ${a.getAttribute('href')}: ${why}`);
+        }
+      }
+      if (!seen) bad.push(`${pathOf(n)} shows no three-digit page number in a nav, the page index or the button bar`);
+    }
+    report('T35', s, !bad.length, 'every page number is a link to its variant, an anchor or its external site', bad);
+  }
+  // T38: house style on every light and dark page.
+  {
+    const bad = [...darkDown];
+    const BANNED = ['unlock', 'empower', 'seamless', 'robust', 'revolutionary', 'game-changing', 'elevate'];
+    for (const n of [...lightNames, ...darkUp]) {
+      const body = visibleText(doc[n].querySelector('body'));
+      const at = body.indexOf(EM_DASH);
+      if (at >= 0) bad.push(`${pathOf(n)} em dash near: ${body.slice(Math.max(0, at - 30), at + 30)}`);
+      for (const w of BANNED) if (word(w).test(body)) bad.push(`${pathOf(n)} says "${w}"`);
+      for (const u of urlsOf(doc[n], pathOf(n))) if (/mascot/i.test(u)) bad.push(`${pathOf(n)} loads a mascot image ${u}`);
+      for (const c of await pageCss(n)) {
+        if (/big[\s_-]*shoulders/i.test(c.text ?? '')) bad.push(`${pathOf(n)} CSS ${c.where} names Big Shoulders`);
+        for (const u of cssUrls(c.text ?? '')) if (/mascot/i.test(u)) bad.push(`${pathOf(n)} CSS ${c.where} loads a mascot image ${u}`);
+      }
+    }
+    report('T38', s, !bad.length, 'no em dash, banned word, mascot image or Big Shoulders', bad);
   }
 }
 

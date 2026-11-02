@@ -30,12 +30,20 @@ Load any page. Nothing outside littleaicompany.com is contacted, and the footer 
 - T8 reads the `Set-Cookie` header of every response, not only the pages: on the build side
   every URL `checks.mjs` fetches, on the live side every same-origin URL `live.sh` requests
   (it lists them in `asset-cookies.tsv`). A snapshot without that file fails T8.
+- T11 has two producers per side, and both must pass. `checks.mjs` reads the first `<footer>`
+  in the HTML. `browser.mjs` reads the same footer as rendered, keeping only text that passes
+  `seen()` (`checkVisibility` with opacity, larger than 1px, inside the page), so a stylesheet
+  that hides the promise fails. On dark pages the same check is part of T24.
 - `run-all.sh` compares the third-party test file with `origin/dev` and requires its name in
   the vitest output of a passing T14.
 
 ## Gotchas
 
-- The live replay serves production's pages and stylesheets only. Fonts and images answer 404
-  there. T9 reads which origins Chrome asked for, not whether they answered, and T5 checks
-  production's statuses from the snapshot.
+- The live replay serves production's pages, and every same-origin asset that `live.sh` saw
+  answer 200 (stylesheets, fonts, images, icons). Anything else answers 404 there. T9 reads
+  which origins Chrome asked for, not whether they answered, and T5 checks production's
+  statuses from the snapshot.
+- T7 to T11 judge the light pages and the 404 page. T24 runs the same predicates over the dark
+  pages. T8 is the exception: a `Set-Cookie` on any response either side fetched fails T8,
+  dark pages included, because a cookie anywhere breaks the footer promise.
 - Never edit `tests/unit/third-party.test.ts` to make a branch pass. T10 fails on any byte.
