@@ -140,6 +140,11 @@ async function journeys(side, base) {
   // A replayed page may name production by its absolute URL. That is its own origin, not a third party.
   const own = (u) => u.startsWith(origin) || u.startsWith('data:') || u === SITE || u.startsWith(`${SITE}/`);
   const page = await browser.newPage();
+  // The tab is reused across routes and astro preview answers no-cache, so Chrome revalidates every
+  // repeat font and gets 304. A 304 is judged as the 200 this tab already received for that URL.
+  // Turning the cache off over CDP does not stop the revalidation (checked 2026-11-02).
+  const fetched = new Set();
+  page.on('response', (r) => { if (r.status() === 200) fetched.add(r.url()); });
   const requests = [];
   page.on('request', (r) => requests.push(r.url()));
   const h1 = async () => (await page.locator('h1').first().innerText()).replace(/\s+/g, ' ').trim();
@@ -355,7 +360,7 @@ async function journeys(side, base) {
       }
       for (const r of fonts) {
         const u = new URL(r.url);
-        if (r.status !== 200) b.push(`${path} font ${u.pathname} answered ${r.status}${side === 'live' ? ', not kept by live.sh?' : ''}`);
+        if (r.status !== 200 && !(r.status === 304 && fetched.has(r.url))) b.push(`${path} font ${u.pathname} answered ${r.status}${side === 'live' ? ', not kept by live.sh?' : ''}`);
         if (u.origin !== origin || !/\.woff2$/.test(u.pathname)) b.push(`${path} font ${r.url} is not a woff2 file from this origin`);
       }
       if (f.body !== 'Zen Kaku Gothic New') b.push(`${path} body font-family starts "${f.body}"`);
