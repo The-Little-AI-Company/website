@@ -31,13 +31,16 @@ Open any page and click "Dark version" in the strip. Click "Light version" to co
   predicates over the dark pages and prefixes each detail with that row's ID, so
   `T5 404 /images/missing.png` is a dark-page asset. The light rows keep judging only the
   light pages and the 404 page.
-- T24 has a browser part in `browser.mjs`: every dark page answers 200 and requests only its
-  own origin. T25 has a browser part: the variant link must be rendered and visible
-  (`checkVisibility`, a box larger than 1px) and go to the other variant of the same page.
+- T24 has browser parts in `browser.mjs`: every dark page answers 200 and requests only its
+  own origin, and each dark page that serves shows the footer promise. T25 has a browser
+  part: the variant link must pass `seen()` (`checkVisibility` with opacity, a box larger than
+  1px, inside the page area a visitor can scroll to) and go to the other variant of the same
+  page. A link moved off the page fails.
 - T26 reads every same-origin `<a href>` that names a page: a path ending in `/` or `.html`,
   or with no file extension. On a light page, a link under `/dark/` fails unless its visible
-  text is "Dark version". On a dark page, a link outside `/dark/` fails unless its text is
-  "Light version".
+  text is "Dark version" and it goes to this page's own dark route, the link T25 requires. On
+  a dark page, a link outside `/dark/` fails unless its text is "Light version" and it goes to
+  this page's light page.
 - T27 opens `/` and `/vivary/` with `emulateMedia({ colorScheme })` set to dark and then light.
   It reads the `color-scheme` meta and the computed body background, which must be the
   key's light `--paper`.

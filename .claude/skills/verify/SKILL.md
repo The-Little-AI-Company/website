@@ -27,7 +27,7 @@ Each row prints one line per side: `PASS`, `FAIL`, `WARN` (T6 only: an external 
 fails without a 5xx) or `KNOWN` (a failure whose path the key lists under Known defects).
 Rows the key marks `target, fails on today's production` print `[target]`. Some rows have
 two results per side, a static one from `checks.mjs` and a rendered one from `browser.mjs`
-(T9, T17, T18, T24, T25, T32). Both must pass.
+(T9, T11, T17, T18, T23, T24, T25, T32). Both must pass.
 
 The last line is `VERIFY_RESULT=pass|fail targets_failed_build=N targets_failed_live=N build:[...] live:[...]`.
 
@@ -142,12 +142,15 @@ $H/cleanup.sh /srv/website
   parts of the redesign rows: T13's no `/dark/` URL, T15, T23 to T26, T28, T31, T32, T35 and
   T38. The build side reads `dist/` for T28 and `REPO/.github/workflows` for T31.
 - `browser.mjs` drives the reviewed Chrome (`/opt/google/chrome/chrome`) through
-  `@playwright/test`, against the preview and then the replay. It finds the nav by its
-  accessible name, `navigation "Main"`, and each link by its label from the key's Pages
-  table, read without a leading page number. The header mark is `header a[href="/"]`. For
-  T17 and T18 it requires the release text and link to be rendered and visible
-  (`checkVisibility`, non-zero size). It judges the rendered rows T24, T25, T27, T29, T30,
-  T32 to T34, T36 and T37 on every light and dark page.
+  `@playwright/test`, against the preview and then the replay. It finds the nav as the `nav`
+  inside the site `header`, whatever its accessible name, and each link by its label from the
+  key's Pages table, read without a leading page number. The header mark is
+  `header a[href="/"]`. One `seen()` predicate defines visible: `checkVisibility` with
+  opacity, a box larger than 1px, and inside the page area a visitor can scroll to. T11's
+  footer promise, T17 and T18's release text and link, T23's required strings in `<main>`,
+  T25's variant link and every element T37 focuses must pass it. T32 reads each token's
+  computed value. It judges the rendered rows T24, T25, T27, T29, T30, T32 to T34, T36 and
+  T37 on every light and dark page.
 - `live.sh` collects every `href`, `src`, `poster`, `data`, `srcset` candidate, `og:image`
   and `url()` in the pages, `url()` in each stylesheet, and each icon `src` in the web app
   manifest, resolved against the page, stylesheet or manifest. `checks.mjs` parses the

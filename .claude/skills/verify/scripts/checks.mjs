@@ -58,6 +58,7 @@ const nameOf = (path) => Object.keys(PATHS).find((n) => PATHS[n] === path);
 // The key's dark routes, named after their light page: /dark/callout/ is dark-callout, as in live.sh.
 const DARK = Object.fromEntries(key.dark.map((d) => [`dark-${nameOf(d.light)}`, d.path]));
 const LIGHT_OF = Object.fromEntries(key.dark.map((d) => [`dark-${nameOf(d.light)}`, d.light]));
+const darkOf = (light) => key.dark.find((d) => d.light === light).path;
 const pathOf = (n) => PATHS[n] ?? DARK[n] ?? '/does-not-exist/';
 const isDarkPath = (path) => path === '/dark' || path.startsWith('/dark/');
 
@@ -198,12 +199,13 @@ async function judge(side) {
   const darkDown = darkNames.filter((n) => p[n]?.status !== 200)
     .map((n) => `${DARK[n]} status ${p[n] ? p[n].status : 'missing, not collected by live.sh'}`);
 
-  // The CSS a page applies: its <style> blocks and its same-origin stylesheets. text is null for a
-  // stylesheet this side cannot read.
+  // The CSS a page applies, in document order: its <style> blocks and its same-origin stylesheets.
+  // text is null for a stylesheet this side cannot read.
   const pageCss = async (n) => {
-    const out = doc[n].querySelectorAll('style').map((el) => ({ where: `${pathOf(n)} <style>`, text: el.text }));
-    for (const l of doc[n].querySelectorAll('link[rel~="stylesheet"][href]')) {
-      const u = resolveRef(l.getAttribute('href'), SITE + pathOf(n));
+    const out = [];
+    for (const el of doc[n].querySelectorAll('style, link[rel~="stylesheet"][href]')) {
+      if (el.tagName === 'STYLE') { out.push({ where: `${pathOf(n)} <style>`, text: el.text }); continue; }
+      const u = resolveRef(el.getAttribute('href'), SITE + pathOf(n));
       if (u && isOwn(u)) out.push({ where: u, text: await side.sheet(u) });
     }
     return out;
@@ -357,7 +359,7 @@ async function judge(side) {
     const bad = await foreign(htmlPages);
     report('T9', s, !bad.length, 'no third-party loader, connection hint or foreign CSS (html part)', bad);
   }
-  // T11: footer sentence on every page.
+  // T11: footer sentence on every page. browser.mjs checks that the rendered footer shows it.
   report('T11', s, !footerless(htmlPages).length, 'footer privacy promise on every page', footerless(htmlPages));
   // T12 robots, T13 sitemap.
   {
@@ -459,7 +461,8 @@ async function judge(side) {
     report('T22', s, !bad.length, 'home <main> is in company voice', bad);
   }
   // T23: each page in the Required strings table, and its dark page once it serves, keeps every
-  // string in the visible text of <main>.
+  // string in the visible text of <main>. This sees inline hiding only. browser.mjs checks the
+  // rendered <main>, where a stylesheet can hide text too.
   {
     const bad = [];
     for (const r of key.required) {
@@ -505,7 +508,6 @@ async function judge(side) {
       if (!links.length) bad.push(`${pathOf(n)} has no visible "${label}" link`);
       else if (!hrefs.includes(target)) bad.push(`${pathOf(n)} "${label}" links ${hrefs.join(' ')}, expected ${target}`);
     };
-    const darkOf = (light) => key.dark.find((d) => d.light === light).path;
     for (const n of htmlPages) variantLink(n, 'Dark version', darkOf(n === 'notfound' ? '/' : PATHS[n]));
     for (const n of darkUp) variantLink(n, 'Light version', LIGHT_OF[n]);
     report('T25', s, !bad.length, 'a visible "Dark version" and "Light version" link on every page', bad);
@@ -517,11 +519,13 @@ async function judge(side) {
     const pageLinks = (n) => doc[n].querySelectorAll('a[href]')
       .map((a) => ({ label: visibleText(a), u: resolveRef(a.getAttribute('href'), SITE + pathOf(n)) }))
       .filter(({ u }) => u && isOwn(u) && isPage(u));
+    // The one crossing allowed is the variant link T25 names: its label, to this page's other variant.
+    const variant = (label, u, want, to) => label === want && u.split('?')[0] === to;
     for (const n of htmlPages) for (const { label, u } of pageLinks(n)) {
-      if (isDarkPath(u) && label !== 'Dark version') bad.push(`${pathOf(n)} links into the dark variant: ${u} "${label}"`);
+      if (isDarkPath(u) && !variant(label, u, 'Dark version', darkOf(n === 'notfound' ? '/' : PATHS[n]))) bad.push(`${pathOf(n)} links into the dark variant: ${u} "${label}"`);
     }
     for (const n of darkUp) for (const { label, u } of pageLinks(n)) {
-      if (!isDarkPath(u) && label !== 'Light version') bad.push(`${pathOf(n)} leaves the dark variant: ${u} "${label}"`);
+      if (!isDarkPath(u) && !variant(label, u, 'Light version', LIGHT_OF[n])) bad.push(`${pathOf(n)} leaves the dark variant: ${u} "${label}"`);
     }
     report('T26', s, !bad.length, 'page links stay in their variant except the variant link', bad);
   }
@@ -560,17 +564,20 @@ async function judge(side) {
     }
     report('T31', s, !bad.length, s === 'build' ? 'no season overlay on any page and no scheduled workflow' : 'no season overlay on any page', bad);
   }
-  // T32, the html part: each variant's CSS defines its tokens with the key's values.
-  // browser.mjs has the pink-text part.
+  // T32, the html part: the last declaration of each token in the page's CSS has the key's value.
+  // Selectors and media are not read. browser.mjs judges the computed values and the pink-text part.
   {
     const bad = [...darkDown];
-    const defines = (css, name, value) => new RegExp(`${esc(name)}\\s*:\\s*${esc(value)}\\s*(!important\\s*)?[;}]`, 'i').test(css);
+    const last = (css, name) => [...css.matchAll(new RegExp(`(?<![\\w-])${esc(name)}\\s*:\\s*([^;}!]*)`, 'gi'))].pop()?.[1].trim();
     for (const [names, tokens] of [[lightNames, key.lightTokens], [darkUp, key.darkTokens]]) {
       for (const n of names) {
         const css = await pageCss(n);
         for (const c of css) if (c.text === null) bad.push(`${pathOf(n)} stylesheet ${c.where} unreadable`);
         const all = css.map((c) => c.text ?? '').join('\n');
-        for (const [name, value] of Object.entries(tokens)) if (!defines(all, name, value)) bad.push(`${pathOf(n)} CSS does not define ${name}: ${value}`);
+        for (const [name, value] of Object.entries(tokens)) {
+          const got = last(all, name);
+          if (got?.toLowerCase() !== value.toLowerCase()) bad.push(`${pathOf(n)} CSS does not define ${name}: ${value}${got === undefined ? '' : `, its last declaration is ${got}`}`);
+        }
       }
     }
     report('T32', s, !bad.length, 'light and dark tokens defined with the key\'s values (html part)', bad);

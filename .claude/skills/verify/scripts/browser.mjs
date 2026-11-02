@@ -1,7 +1,7 @@
 // Browser journeys in the reviewed Chrome, on both sides:
 //   build: astro preview of the branch under test
 //   live:  replay.mjs serving the live.sh snapshot, production's own pages, stylesheets, fonts and images
-// Rows: T3, T4, T9 (every request), T17, T18 (release text and link visible on the rendered page),
+// Rows: T3, T4, T9 (every request), T11, T17, T18, T23 (text visible on the rendered page),
 // and the rendered parts of the redesign rows: T24, T25, T27, T29, T30, T32, T33, T34, T36, T37.
 // Usage: node browser.mjs KEY_JSON BUILD_URL LIVE_REPLAY_URL WORK_DIR EVIDENCE_DIR
 import { createRequire } from 'node:module';
@@ -78,13 +78,33 @@ const behind = (el) => {
   }
   return layers.reverse().reduce((base, top) => over(top, base), canvasColor());
 };
-// Text nodes a visitor sees: rendered, not transparent, with a box, outside aria-hidden and svg.
-const visibleTexts = () => {
+// Visible to a visitor: rendered, not transparent, larger than the 1px clip of a screen-reader-only
+// element, and inside the page area a visitor can scroll to.
+const seen = (el) => {
+  const r = el.getBoundingClientRect();
+  const page = document.documentElement;
+  return el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) && r.width > 1 && r.height > 1 &&
+    r.right + scrollX > 0 && r.bottom + scrollY > 0 && r.left + scrollX < page.scrollWidth && r.top + scrollY < page.scrollHeight;
+};
+// The text of el that seen() keeps, with a word break at every element that does not render inline.
+const shownText = (el) => {
+  const walk = (n) => {
+    if (n.nodeType === Node.TEXT_NODE) return seen(n.parentElement) ? n.data : ' ';
+    if (n.nodeType !== Node.ELEMENT_NODE) return '';
+    const inner = [...n.childNodes].map(walk).join('');
+    const display = getComputedStyle(n).display;
+    return n.tagName === 'BR' || !(display.startsWith('inline') || display === 'contents') ? ' ' + inner + ' ' : inner;
+  };
+  return el ? walk(el).replace(/\s+/g, ' ').trim() : '';
+};
+// Text nodes rendered with a box, outside svg. Off-page and 1px text stays in, so the rows that
+// judge every text node judge more, not less. T30 leaves out aria-hidden text, as its row says.
+const visibleTexts = (ariaHidden = false) => {
   const out = [];
   const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   for (let t = w.nextNode(); t; t = w.nextNode()) {
     const el = t.parentElement;
-    if (!t.data.trim() || !el || el.closest('[aria-hidden="true"], svg')) continue;
+    if (!t.data.trim() || !el || el.closest('svg') || (!ariaHidden && el.closest('[aria-hidden="true"]'))) continue;
     if (!el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) continue;
     const r = document.createRange();
     r.selectNodeContents(t);
@@ -133,13 +153,15 @@ async function journeys(side, base) {
     return false;
   };
 
-  // T3: each main nav link from the home page. A label is the link text without a leading page number.
+  // T3: each main nav link from the home page. The main nav is the nav in the site header, whatever
+  // its accessible name. A label is the link text without a leading page number.
   {
     const bad = [];
     for (const target of navPages) {
       const name = /label "([^"]+)"/.exec(target.nav)[1];
       await page.goto(`${base}/`);
-      const links = page.getByRole('navigation', { name: 'Main' }).getByRole('link');
+      if (!(await page.locator('header nav').count())) { bad.push('/ has no <nav> inside a <header>'); break; }
+      const links = page.locator('header nav').getByRole('link');
       let link = null;
       for (let i = 0; i < (await links.count()) && !link; i++) {
         if ((await links.nth(i).innerText()).replace(/\s+/g, ' ').trim().replace(/^\d{3}\s*/, '') === name) link = links.nth(i);
@@ -152,6 +174,7 @@ async function journeys(side, base) {
       await shot(`T3-${name}`);
       if (path !== target.path) bad.push(`${name} landed on ${path}, expected ${target.path}`);
       if (got !== target.h1) bad.push(`${name} h1 "${got}", expected "${target.h1}"`);
+      else if (!(await inPage(page, () => seen(document.querySelector('h1'))))) bad.push(`${name} h1 "${got}" is not visible`);
     }
     report('T3', side, bad.length === 0 && navPages.length > 0, `${navPages.length} nav links land on their page`, bad);
   }
@@ -194,17 +217,9 @@ async function journeys(side, base) {
     report('T24', side, !bad.length, `${DARK.length} dark pages answer 200 and request only their own origin (browser part)`, bad);
   }
   // T17 and T18: the release text and link are rendered and visible, not only present in the HTML.
-  const visibleRelease = (root) => page.evaluate(([sel, release]) => {
+  const visibleRelease = (root) => inPage(page, ([sel, release]) => {
     const el = sel ? document.querySelector(sel)?.closest('article, section') : document.body;
     if (!el) return { text: false, link: false, found: false };
-    // Visible means rendered, not transparent, larger than the 1px clip of a screen-reader-only
-    // element, and inside the page area a visitor can scroll to.
-    const page = document.documentElement;
-    const seen = (n) => {
-      const r = n.getBoundingClientRect();
-      return n.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) && r.width > 1 && r.height > 1 &&
-        r.right > 0 && r.bottom > 0 && r.left < page.scrollWidth && r.top < page.scrollHeight;
-    };
     // The element that holds the version text must itself be visible, not only its section.
     const holders = [];
     const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
@@ -227,28 +242,50 @@ async function journeys(side, base) {
   }
 
   // One visit per page for the rows that read the rendered page.
-  const bad = Object.fromEntries(['T25', 'T30', 'T32', 'T33', 'T34', 'T37'].map((id) => [id, []]));
+  const bad = Object.fromEntries(['T11', 'T23', 'T24', 'T25', 'T30', 'T32', 'T33', 'T34', 'T37'].map((id) => [id, []]));
   const fonts = [];
   page.on('response', (r) => { if (r.request().resourceType() === 'font') fonts.push({ url: r.url(), status: r.status() }); });
   const paper = hexToRgb(key.lightTokens['--paper']);
   const pink = hexToRgb(key.lightTokens['--pink']);
   for (const path of [...LIGHT, NOT_FOUND, ...DARK]) {
     const dark = DARK.includes(path);
+    const light = dark ? key.dark.find((d) => d.path === path).light : path;
     fonts.length = 0;
-    const rows = path === NOT_FOUND ? [bad.T25] : [bad.T25, bad.T30, bad.T33, bad.T34, bad.T37];
+    // A dark route that is not a page yet counts against the redesign rows, not the invariants
+    // T11 and T23. T24 reports its status.
+    const rows = path === NOT_FOUND ? [bad.T11, bad.T25] : dark ? [bad.T25, bad.T30, bad.T32, bad.T33, bad.T34, bad.T37]
+      : [bad.T11, bad.T23, bad.T25, bad.T30, bad.T32, bad.T33, bad.T34, bad.T37];
     if (!(await open(path, rows, path === NOT_FOUND ? 404 : 200))) continue;
-    // T25: the variant link is rendered, visible and goes to the other variant of this page.
+    // T11, and its part of T24 on a dark page: the footer shows the privacy promise.
+    if (!(await inPage(page, (want) => shownText(document.querySelector('footer')).includes(want), key.footer))) {
+      (dark ? bad.T24 : bad.T11).push(`${path} footer does not show "${key.footer}"`);
+    }
+    // T23: the required strings are in the text of <main> a visitor sees.
+    const required = key.required.find((r) => r.path === light);
+    if (required) {
+      const main = await inPage(page, () => shownText(document.querySelector('main')));
+      for (const want of required.strings) if (!main.includes(want)) bad.T23.push(`${path} <main> does not show "${want}"`);
+    }
+    // T25: the variant link is visible and goes to the other variant of this page.
     {
-      const [text, target] = dark ? ['Light version', key.dark.find((d) => d.path === path).light]
+      const [text, target] = dark ? ['Light version', light]
         : ['Dark version', key.dark.find((d) => d.light === (path === NOT_FOUND ? '/' : path)).path];
-      const found = await page.evaluate(([want, to]) => [...document.querySelectorAll('a[href]')].some((a) => {
-        const r = a.getBoundingClientRect();
-        return a.innerText.replace(/\s+/g, ' ').trim() === want && new URL(a.href).pathname === to &&
-          a.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) && r.width > 1 && r.height > 1;
-      }), [text, target]);
+      const found = await inPage(page, ([want, to]) => [...document.querySelectorAll('a[href]')].some((a) =>
+        a.innerText.replace(/\s+/g, ' ').trim() === want && new URL(a.href).pathname === to && seen(a)), [text, target]);
       if (!found) bad.T25.push(`${path} renders no visible "${text}" link to ${target}`);
     }
     if (path === NOT_FOUND) continue;
+    // T32: each token's effective value on the page is the value in its variant's tokens table.
+    {
+      const want = dark ? key.darkTokens : key.lightTokens;
+      const got = await inPage(page, (names) => names.map((n) => {
+        const v = getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+        return [n, v, v && CSS.supports('color', v) ? rgba(v) : null];
+      }), Object.keys(want));
+      for (const [name, v, rgb] of got) {
+        if (!rgb || rgb[3] !== 1 || hexToRgb(want[name]).some((c, i) => c !== rgb[i])) bad.T32.push(`${path} ${name} computes to "${v}", expected ${want[name]}`);
+      }
+    }
     // T30 contrast, and T32's rule that pink text on paper is only --pink-text on light pages.
     const texts = await inPage(page, () => visibleTexts().map(({ t, el }) => {
       const cs = getComputedStyle(el);
@@ -294,14 +331,16 @@ async function journeys(side, base) {
         const walk = (list) => { for (const r of list) { if (r instanceof CSSFontFaceRule) rules.push(r); else if (r.cssRules) walk(r.cssRules); } };
         const unreadable = [];
         for (const sh of document.styleSheets) { try { walk(sh.cssRules); } catch { unreadable.push(sh.href); } }
+        // T34 has no aria-hidden exception, so decorative text counts.
+        const texts = visibleTexts(true).map(({ t, el }) => ({ text: t.data.trim().slice(0, 30), cs: getComputedStyle(el) }));
         return {
           unreadable,
           faces: rules.map((r) => ({ family: r.style.getPropertyValue('font-family').trim().replace(/^["']|["']$/g, ''),
             srcs: [...r.style.getPropertyValue('src').matchAll(/(url|local)\(\s*["']?([^"')]*)/g)].map((m) => (m[1] === 'local' ? `local(${m[2]})` : m[2].slice(0, 80))) })),
           body: firstFamily(getComputedStyle(document.body)),
           loaded: [...document.fonts].filter((x) => x.status === 'loaded').map((x) => x.family.replace(/^["']|["']$/g, '')),
-          small: visibleTexts().map(({ t, el }) => ({ text: t.data.trim().slice(0, 30), cs: getComputedStyle(el) }))
-            .filter(({ cs }) => firstFamily(cs) === 'VT323' && parseFloat(cs.fontSize) < 20).map(({ text, cs }) => `"${text}" ${cs.fontSize}`),
+          small: texts.filter(({ cs }) => firstFamily(cs) === 'VT323' && parseFloat(cs.fontSize) < 20).map(({ text, cs }) => `"${text}" ${cs.fontSize}`),
+          used: texts.map(({ text, cs }) => [text, firstFamily(cs)]),
         };
       });
       const b = bad.T34;
@@ -322,6 +361,12 @@ async function journeys(side, base) {
       if (f.body !== 'Zen Kaku Gothic New') b.push(`${path} body font-family starts "${f.body}"`);
       else if (!f.loaded.includes('Zen Kaku Gothic New')) b.push(`${path} Zen Kaku Gothic New never loaded`);
       for (const s of f.small) b.push(`${path} VT323 text below 20px: ${s}`);
+      const families = new Map();
+      for (const [text, fam] of f.used) if (!families.has(fam)) families.set(fam, text);
+      for (const [fam, text] of families) {
+        if (!FONTS.includes(fam)) b.push(`${path} text "${text}" is set in "${fam}", not one of ${FONTS.join(', ')}`);
+        else if (!f.loaded.includes(fam)) b.push(`${path} text "${text}" is set in "${fam}", which never loaded`);
+      }
     }
     // T37: the first Tab stop is a skip link to #main, and every focused link or button shows an outline.
     {
@@ -342,12 +387,13 @@ async function journeys(side, base) {
           const cs = getComputedStyle(el);
           const ground = behind(el.parentElement ?? el);
           const color = over(rgba(cs.outlineColor), ground);
-          return { tag: el.tagName, label: label(el), style: cs.outlineStyle, width: parseFloat(cs.outlineWidth),
+          return { tag: el.tagName, label: label(el), seen: seen(el), style: cs.outlineStyle, width: parseFloat(cs.outlineWidth),
             alpha: rgba(cs.outlineColor)[3], differs: ratio(color, ground) > 1.01, hexes: `${hex(color)} on ${hex(ground)}` };
         });
         if (!f || f.again) break;
         if (!['A', 'BUTTON'].includes(f.tag)) { await page.keyboard.press('Tab'); continue; }
-        if (f.style === 'none' || f.width < 1 || f.alpha === 0) bad.T37.push(`${path} "${f.label}" focused with outline ${f.style} ${f.width}px`);
+        if (!f.seen) bad.T37.push(`${path} "${f.label}" is focused but not visible on the page`);
+        else if (f.style === 'none' || f.width < 1 || f.alpha === 0) bad.T37.push(`${path} "${f.label}" focused with outline ${f.style} ${f.width}px`);
         else if (!f.differs) bad.T37.push(`${path} "${f.label}" outline is the colour behind it, ${f.hexes}`);
         await page.keyboard.press('Tab');
       }
@@ -355,9 +401,12 @@ async function journeys(side, base) {
     }
   }
   page.removeAllListeners('response');
+  report('T11', side, !bad.T11.length, 'every light page and the 404 page show the footer promise (browser part)', bad.T11);
+  report('T23', side, !bad.T23.length, `${key.required.length} pages and their serving dark pages show their required strings in <main> (browser part)`, bad.T23);
+  report('T24', side, !bad.T24.length, 'every serving dark page shows the footer promise (browser part)', bad.T24);
   report('T25', side, !bad.T25.length, 'the variant links render and are visible (browser part)', bad.T25);
   report('T30', side, !bad.T30.length, 'visible text meets WCAG AA contrast on every light and dark page', bad.T30);
-  report('T32', side, !bad.T32.length, 'no --pink text on --paper on light pages (browser part)', bad.T32);
+  report('T32', side, !bad.T32.length, 'tokens compute to the key\'s values, and no --pink text on --paper on light pages (browser part)', bad.T32);
   report('T33', side, !bad.T33.length, 'no radius, blur or gradient except halftone dots', bad.T33);
   report('T34', side, !bad.T34.length, 'only the three fonts, woff2 from this origin, body Zen Kaku, VT323 at 20px and up', bad.T34);
   report('T37', side, !bad.T37.length, 'skip link first, and a visible focus outline on every link and button', bad.T37);
@@ -397,7 +446,8 @@ async function journeys(side, base) {
     }
     report('T29', side, !b.length, `the dark ground is dark with stylesheets blocked (${aborted} requests) and allowed`, b);
   }
-  // T36: no horizontal scroll, and 44 by 44 px targets except links inside running text.
+  // T36: no horizontal scroll, and 44 by 44 px targets. Only a link inside a sentence of running
+  // text is exempt, never a button.
   {
     const b = [];
     const dark = (light) => key.dark.find((d) => d.light === light).path;
@@ -408,18 +458,27 @@ async function journeys(side, base) {
         const out = [];
         const d = document.documentElement;
         if (d.scrollWidth > d.clientWidth) out.push(`scrolls sideways, ${d.scrollWidth} > ${d.clientWidth}`);
-        // Running text: the link's block holds text outside every link and button.
-        const inText = (el) => {
-          let block = el.parentElement;
+        // A sentence of running text: the link renders inline, its nearest block is a paragraph,
+        // list item, definition, table cell, quote or caption laid out as flow, and that block shows
+        // at least two words outside its links and buttons. A heading row or a flex row of controls
+        // is not a sentence.
+        const PROSE = new Set(['P', 'LI', 'DD', 'TD', 'BLOCKQUOTE', 'FIGCAPTION']);
+        const inSentence = (a) => {
+          if (!getComputedStyle(a).display.startsWith('inline')) return false;
+          let block = a.parentElement;
           while (block && getComputedStyle(block).display.startsWith('inline')) block = block.parentElement;
-          const w = document.createTreeWalker(block ?? document.body, NodeFilter.SHOW_TEXT);
-          for (let t = w.nextNode(); t; t = w.nextNode()) if (/[\p{L}\p{N}]/u.test(t.data) && !t.parentElement.closest('a, button')) return true;
-          return false;
+          if (!block || !PROSE.has(block.tagName) || !['block', 'list-item', 'table-cell'].includes(getComputedStyle(block).display)) return false;
+          let words = 0;
+          const w = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+          for (let t = w.nextNode(); t; t = w.nextNode()) {
+            if (!t.parentElement.closest('a, button, [role="button"]') && seen(t.parentElement)) words += (t.data.match(/\p{L}{2,}/gu) ?? []).length;
+          }
+          return words >= 2;
         };
         for (const el of document.querySelectorAll('a[href], button, [role="button"]')) {
           if (!el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) continue;
           const r = el.getBoundingClientRect();
-          if ((r.width === 0 && r.height === 0) || (r.width >= 44 && r.height >= 44) || inText(el)) continue;
+          if ((r.width === 0 && r.height === 0) || (r.width >= 44 && r.height >= 44) || (el.matches('a[href]:not([role="button"])') && inSentence(el))) continue;
           out.push(`"${label(el)}" ${Math.round(r.width)}x${Math.round(r.height)}`);
         }
         return out;

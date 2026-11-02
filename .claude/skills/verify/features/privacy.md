@@ -30,6 +30,10 @@ Load any page. Nothing outside littleaicompany.com is contacted, and the footer 
 - T8 reads the `Set-Cookie` header of every response, not only the pages: on the build side
   every URL `checks.mjs` fetches, on the live side every same-origin URL `live.sh` requests
   (it lists them in `asset-cookies.tsv`). A snapshot without that file fails T8.
+- T11 has two producers per side, and both must pass. `checks.mjs` reads the first `<footer>`
+  in the HTML. `browser.mjs` reads the same footer as rendered, keeping only text that passes
+  `seen()` (`checkVisibility` with opacity, larger than 1px, inside the page), so a stylesheet
+  that hides the promise fails. On dark pages the same check is part of T24.
 - `run-all.sh` compares the third-party test file with `origin/dev` and requires its name in
   the vitest output of a passing T14.
 

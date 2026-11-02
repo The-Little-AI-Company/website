@@ -19,9 +19,10 @@ from every other. Mistyped URLs land on the 404 page.
 
 ## Driving it with Playwright and fetch
 
-- `browser.mjs` opens `/`, finds the link in `navigation "Main"` whose text, without a
-  leading three-digit page number, is the label from the key ("110 Callout" is "Callout"),
-  clicks it, and reads the landing path and `h1`. Screenshot `screens/<side>-T3-<label>.png`.
+- `browser.mjs` opens `/`, finds the link in the header nav (`header nav`, whatever its
+  accessible name) whose text, without a leading three-digit page number, is the label from
+  the key ("110 Callout" is "Callout"), clicks it, and reads the landing path and `h1`. The
+  `h1` must be visible, as `seen()` defines it below. Screenshot `screens/<side>-T3-<label>.png`.
 - On `/about/` it clicks `header a[href="/"]` and expects `/`. Screenshot `screens/<side>-T4-mark.png`.
 - Both journeys run on the build preview and on the live replay, so a renamed live nav label
   or a broken live mark link fails.
@@ -36,8 +37,12 @@ from every other. Mistyped URLs land on the 404 page.
   The build side adds the manifest icons to T5 too.
 - T5 judges the URLs the light pages and the 404 page name, on both sides. A URL that only a
   dark page names belongs to T24, which runs the same predicate over the dark pages.
-- T23 reads the visible text of `<main>` (hidden subtrees skipped, whitespace collapsed) on
-  both sides and needs every string in the page's Required strings row.
+- T23 has two producers per side, and both must pass. `checks.mjs` reads the text of `<main>`
+  with inline-hidden subtrees skipped and whitespace collapsed. `browser.mjs` reads the
+  rendered `<main>` on each light page and each dark page that answers 200, keeping only text
+  whose element passes `seen()`: `checkVisibility` with opacity, a box larger than 1px, and
+  inside the page area a visitor can scroll to. That catches text a stylesheet hides. An
+  element that does not render inline separates words, as in the static reader.
 
 ## Gotchas
 
@@ -47,8 +52,12 @@ from every other. Mistyped URLs land on the 404 page.
 - T23 matches each string case-sensitively. A restyle that keeps the words passes. A
   dark page is read only when it answers 200, so T23 stays an invariant while the dark
   routes 404.
-- T3 needs the nav named "Main". The approved prototype names it "Pages". The redesign must
-  keep `aria-label="Main"` or T3 fails with `no nav link labelled`.
+- T3 reads the first-level navigation as every `nav` inside a `header`. Production names it
+  "Main" and the approved prototype names it "Pages". Both pass. A header with no `nav` fails
+  with `/ has no <nav> inside a <header>`.
+- `seen()` does not detect `clip-path`, `color: transparent`, text covered by another element,
+  or a child of a 1px `overflow: hidden` box. The approved prototype hides no required text
+  these ways and has no screen-reader-only class.
 - Live T5 covers the resource types the site served on 2026-11-01: the HTML pages, their
   stylesheets and `url()` fonts, the web app manifest and its icons, `srcset` and
   `<picture><source>` images, preloads, robots.txt and sitemap.xml. It does not read CSS

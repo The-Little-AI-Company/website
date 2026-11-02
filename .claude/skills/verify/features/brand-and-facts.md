@@ -27,8 +27,9 @@ Read the home page, `/vivary/` and `/about/`.
   `hidden` attribute, inline `display:none`, `visibility:hidden` or `opacity:0`, and elements
   that never render. `browser.mjs` repeats T17 and T18 on the rendered page, where a
   stylesheet can hide content too: the element that holds the version text and the release
-  link must each pass `checkVisibility` (opacity included) with a non-zero size. Both
-  results must pass for the row to pass.
+  link must each pass `seen()`, which is `checkVisibility` with opacity, a box larger than 1px
+  and a place inside the page a visitor can scroll to. Both results must pass for the row to
+  pass.
 - The home Vivary section is the element around `#feature-vivary` (the Vivary heading), up
   to its `article` or the child of `section#work`. If a branch removes that id, T18 fails
   and says so.
@@ -47,6 +48,12 @@ Read the home page, `/vivary/` and `/about/`.
 - T15 compares the `d` attribute as a string. The same shape written with other commands or
   spacing fails. The header mark is the first `<svg>` inside `<header>`. A holiday mark
   changes the path, so a theme needs a key PR for T15 first.
+- T15 reads the `shape-rendering` and `d` attributes, not computed style. A stylesheet that
+  sets the `shape-rendering` or `d` property overrides them unseen. The approved prototype
+  sets neither in CSS.
+- T16, T19, T21 and T22 read the HTML, so text a stylesheet hides still counts against them,
+  which only makes them stricter. Text that CSS `content` adds is not read. The approved
+  prototype uses `content` only as `""`.
 - T19 reads "as the latest release" as the status badges (`.status`) and the now line
   (`.now`), which are where the site states its current release. A history line elsewhere
   may name Sept 22, 2026.
@@ -55,6 +62,7 @@ Read the home page, `/vivary/` and `/about/`.
   text to pass `checkVisibility` (opacity included), be larger than 1px in both directions
   and sit inside the page area a visitor can scroll to. It does not detect `clip-path`, `color: transparent` or text
   covered by another element. The site uses none of these on the release text.
-- COVER checks that T17 and T18 have a result on each side, not that both producers ran.
+- COVER checks that T17 and T18 (and T11, T23, T25 and T32) have a result on each side, not
+  that both producers ran.
   `checks.mjs` and `browser.mjs` each write one, and COVER passes if one is missing.
   `run-all.sh` always runs both, and `summary.txt` shows both lines.
